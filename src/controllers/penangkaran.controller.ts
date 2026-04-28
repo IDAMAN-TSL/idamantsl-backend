@@ -4,18 +4,39 @@ import { db } from "../../db/index";
 import { penangkaran } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
 
+const buildPenangkaranFields = (body: Record<string, unknown>) => ({
+  nomor: body.nomor as string,
+  namaPenangkaran: body.namaPenangkaran as string,
+  nomorSk: body.nomorSk as string,
+  tanggalSk: body.tanggalSk ? new Date(body.tanggalSk as string) : null,
+  penerbit: body.penerbit as string,
+  akhirMasaBerlaku: body.akhirMasaBerlaku
+    ? new Date(body.akhirMasaBerlaku as string)
+    : null,
+  namaDirektur: body.namaDirektur as string,
+  nomorTelepon: body.nomorTelepon as string,
+  bidangWilayahId: body.bidangWilayahId ? Number(body.bidangWilayahId) : null,
+  seksiWilayahId: body.seksiWilayahId ? Number(body.seksiWilayahId) : null,
+  alamatKantor: body.alamatKantor as string,
+  alamatPenangkaran: body.alamatPenangkaran as string,
+  koordinatLokasi: body.koordinatLokasi as string,
+  tslId: body.tslId ? Number(body.tslId) : null,
+});
+
+const withRelations = {
+  bidangWilayah: true,
+  seksiWilayah: true,
+  tsl: true,
+  createdBy: {
+    columns: { id: true, nama: true, role: true },
+  },
+} as const;
+
 export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const data = await db.query.penangkaran.findMany({
       orderBy: desc(penangkaran.createdAt),
-      with: {
-        bidangWilayah: true,
-        seksiWilayah: true,
-        tsl: true,
-        createdBy: {
-          columns: { id: true, nama: true, role: true },
-        },
-      },
+      with: withRelations,
     });
 
     return res.status(200).json({
@@ -39,12 +60,7 @@ export const getPenangkaranById = async (req: AuthRequest, res: Response) => {
     const data = await db.query.penangkaran.findFirst({
       where: eq(penangkaran.id, Number(id)),
       with: {
-        bidangWilayah: true,
-        seksiWilayah: true,
-        tsl: true,
-        createdBy: {
-          columns: { id: true, nama: true, role: true },
-        },
+        ...withRelations,
         updatedBy: {
           columns: { id: true, nama: true, role: true },
         },
@@ -74,22 +90,7 @@ export const getPenangkaranById = async (req: AuthRequest, res: Response) => {
 
 export const createPenangkaran = async (req: AuthRequest, res: Response) => {
   try {
-    const {
-      nomor,
-      namaPenangkaran,
-      nomorSk,
-      tanggalSk,
-      penerbit,
-      akhirMasaBerlaku,
-      namaDirektur,
-      nomorTelepon,
-      bidangWilayahId,
-      seksiWilayahId,
-      alamatKantor,
-      alamatPenangkaran,
-      koordinatLokasi,
-      tslId,
-    } = req.body;
+    const { namaPenangkaran } = req.body;
 
     if (!namaPenangkaran) {
       return res.status(400).json({
@@ -104,20 +105,7 @@ export const createPenangkaran = async (req: AuthRequest, res: Response) => {
     const [data] = await db
       .insert(penangkaran)
       .values({
-        nomor,
-        namaPenangkaran,
-        nomorSk,
-        tanggalSk: tanggalSk ? new Date(tanggalSk) : null,
-        penerbit,
-        akhirMasaBerlaku: akhirMasaBerlaku ? new Date(akhirMasaBerlaku) : null,
-        namaDirektur,
-        nomorTelepon,
-        bidangWilayahId: bidangWilayahId ? Number(bidangWilayahId) : null,
-        seksiWilayahId: seksiWilayahId ? Number(seksiWilayahId) : null,
-        alamatKantor,
-        alamatPenangkaran,
-        koordinatLokasi,
-        tslId: tslId ? Number(tslId) : null,
+        ...buildPenangkaranFields(req.body),
         statusVerifikasi,
         createdBy: req.user?.id,
       })
@@ -139,6 +127,7 @@ export const createPenangkaran = async (req: AuthRequest, res: Response) => {
     });
   }
 };
+
 export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -153,6 +142,7 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
         message: "Data penangkaran tidak ditemukan",
       });
     }
+
     if (
       req.user?.role === "bidang_wilayah" &&
       existing.createdBy !== req.user?.id
@@ -163,42 +153,13 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const {
-      nomor,
-      namaPenangkaran,
-      nomorSk,
-      tanggalSk,
-      penerbit,
-      akhirMasaBerlaku,
-      namaDirektur,
-      nomorTelepon,
-      bidangWilayahId,
-      seksiWilayahId,
-      alamatKantor,
-      alamatPenangkaran,
-      koordinatLokasi,
-      tslId,
-    } = req.body;
     const statusVerifikasi =
       req.user?.role === "admin_pusat" ? existing.statusVerifikasi : "pending";
 
     const [data] = await db
       .update(penangkaran)
       .set({
-        nomor,
-        namaPenangkaran,
-        nomorSk,
-        tanggalSk: tanggalSk ? new Date(tanggalSk) : null,
-        penerbit,
-        akhirMasaBerlaku: akhirMasaBerlaku ? new Date(akhirMasaBerlaku) : null,
-        namaDirektur,
-        nomorTelepon,
-        bidangWilayahId: bidangWilayahId ? Number(bidangWilayahId) : null,
-        seksiWilayahId: seksiWilayahId ? Number(seksiWilayahId) : null,
-        alamatKantor,
-        alamatPenangkaran,
-        koordinatLokasi,
-        tslId: tslId ? Number(tslId) : null,
+        ...buildPenangkaranFields(req.body),
         statusVerifikasi,
         updatedBy: req.user?.id,
         updatedAt: new Date(),
@@ -248,9 +209,7 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    await db
-      .delete(penangkaran)
-      .where(eq(penangkaran.id, Number(id)));
+    await db.delete(penangkaran).where(eq(penangkaran.id, Number(id)));
 
     return res.status(200).json({
       success: true,
