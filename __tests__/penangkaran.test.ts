@@ -1,0 +1,396 @@
+import request from "supertest";
+import app from "../index";
+import { db } from "../db/index";
+
+jest.mock("../db/index", () => ({
+  db: {
+    query: {
+      penangkaran: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+      },
+    },
+    insert: jest.fn(() => ({
+      values: jest.fn(() => ({
+        returning: jest.fn(),
+      })),
+    })),
+    update: jest.fn(() => ({
+      set: jest.fn(() => ({
+        where: jest.fn(() => ({
+          returning: jest.fn(),
+        })),
+      })),
+    })),
+    delete: jest.fn(() => ({
+      where: jest.fn(),
+    })),
+  },
+}));
+
+jest.mock("jsonwebtoken", () => ({
+  sign: jest.fn(() => "mocked_token"),
+  verify: jest.fn(),
+  TokenExpiredError: class TokenExpiredError extends Error {
+    constructor() {
+      super("jwt expired");
+      this.name = "TokenExpiredError";
+    }
+  },
+  JsonWebTokenError: class JsonWebTokenError extends Error {
+    constructor() {
+      super("invalid token");
+      this.name = "JsonWebTokenError";
+    }
+  },
+}));
+
+import jwt from "jsonwebtoken";
+const mockDb = db as jest.Mocked<typeof db>;
+
+const mockAdminToken = "mocked_admin_token";
+const mockAdminUser = {
+  id: 1,
+  email: "admin@bbksda-jabar.id",
+  role: "admin_pusat",
+  wilayahId: null,
+};
+
+const mockBidangToken = "mocked_bidang_token";
+const mockBidangUser = {
+  id: 2,
+  email: "bidang@bbksda-jabar.id",
+  role: "bidang_wilayah",
+  wilayahId: 1,
+};
+
+const mockSeksiToken = "mocked_seksi_token";
+const mockSeksiUser = {
+  id: 3,
+  email: "seksi@bbksda-jabar.id",
+  role: "seksi_wilayah",
+  wilayahId: 4,
+};
+
+const mockPenangkaran = {
+  id: 1,
+  nomor: "001",
+  namaPenangkaran: "Penangkaran Rusa Timor",
+  nomorSk: "SK.1010/KSDAE/2024",
+  tanggalSk: new Date("2024-01-01"),
+  penerbit: "Direjen KSDAE",
+  akhirMasaBerlaku: new Date("2027-01-01"),
+  namaDirektur: "Budi Santoso",
+  nomorTelepon: "08123456789",
+  bidangWilayahId: 1,
+  seksiWilayahId: 4,
+  alamatKantor: "Jl. Contoh No. 1, Bogor",
+  alamatPenangkaran: "Jl. Penangkaran No. 2, Bogor",
+  koordinatLokasi: "-6.595038, 106.816635",
+  tslId: null,
+  statusVerifikasi: "disetujui",
+  catatanVerifikasi: null,
+  createdBy: 1,
+  updatedBy: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+const mockBodyPenangkaran = {
+  namaPenangkaran: "Penangkaran Rusa Timor",
+  nomor: "001",
+  nomorSk: "SK.1010/KSDAE/2024",
+  tanggalSk: "2024-01-01",
+  penerbit: "Direjen KSDAE",
+  akhirMasaBerlaku: "2027-01-01",
+  namaDirektur: "Budi Santoso",
+  nomorTelepon: "08123456789",
+  bidangWilayahId: 1,
+  seksiWilayahId: 4,
+  alamatKantor: "Jl. Contoh No. 1, Bogor",
+  alamatPenangkaran: "Jl. Penangkaran No. 2, Bogor",
+  koordinatLokasi: "-6.595038, 106.816635",
+  tslId: null,
+};
+
+describe("Penangkaran Endpoints", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe("GET /api/penangkaran", () => {
+    it("berhasil ambil semua data sebagai admin", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findMany as jest.Mock).mockResolvedValue([
+        mockPenangkaran,
+      ]);
+
+      const res = await request(app)
+        .get("/api/penangkaran")
+        .set("Authorization", `Bearer ${mockAdminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveLength(1);
+    });
+
+    it("berhasil ambil semua data sebagai bidang wilayah", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
+      (mockDb.query.penangkaran.findMany as jest.Mock).mockResolvedValue([
+        mockPenangkaran,
+      ]);
+
+      const res = await request(app)
+        .get("/api/penangkaran")
+        .set("Authorization", `Bearer ${mockBidangToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("berhasil ambil semua data sebagai seksi wilayah", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockSeksiUser);
+      (mockDb.query.penangkaran.findMany as jest.Mock).mockResolvedValue([]);
+
+      const res = await request(app)
+        .get("/api/penangkaran")
+        .set("Authorization", `Bearer ${mockSeksiToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("gagal tanpa token", async () => {
+      const res = await request(app).get("/api/penangkaran");
+
+      expect(res.status).toBe(401);
+      expect(res.body.success).toBe(false);
+    });
+  });
+  describe("GET /api/penangkaran/:id", () => {
+    it("berhasil ambil data berdasarkan id", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
+        mockPenangkaran
+      );
+
+      const res = await request(app)
+        .get("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockAdminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.id).toBe(1);
+    });
+
+    it("return 404 jika data tidak ditemukan", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/penangkaran/999")
+        .set("Authorization", `Bearer ${mockAdminToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+    });
+  });
+  describe("POST /api/penangkaran", () => {
+    it("berhasil tambah data sebagai admin pusat", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.insert as jest.Mock).mockReturnValue({
+        values: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([mockPenangkaran]),
+        }),
+      });
+
+      const res = await request(app)
+        .post("/api/penangkaran")
+        .set("Authorization", `Bearer ${mockAdminToken}`)
+        .send(mockBodyPenangkaran);
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("berhasil tambah data sebagai bidang wilayah - status pending", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
+      (mockDb.insert as jest.Mock).mockReturnValue({
+        values: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([
+            { ...mockPenangkaran, statusVerifikasi: "pending", createdBy: 2 },
+          ]),
+        }),
+      });
+
+      const res = await request(app)
+        .post("/api/penangkaran")
+        .set("Authorization", `Bearer ${mockBidangToken}`)
+        .send(mockBodyPenangkaran);
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("menunggu verifikasi");
+    });
+
+    it("gagal tambah data jika nama penangkaran kosong", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+
+      const res = await request(app)
+        .post("/api/penangkaran")
+        .set("Authorization", `Bearer ${mockAdminToken}`)
+        .send({ nomor: "001" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Nama penangkaran wajib diisi");
+    });
+
+    it("gagal tambah data sebagai seksi wilayah", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockSeksiUser);
+
+      const res = await request(app)
+        .post("/api/penangkaran")
+        .set("Authorization", `Bearer ${mockSeksiToken}`)
+        .send(mockBodyPenangkaran);
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("gagal tambah data tanpa token", async () => {
+      const res = await request(app)
+        .post("/api/penangkaran")
+        .send(mockBodyPenangkaran);
+
+      expect(res.status).toBe(401);
+    });
+  });
+  describe("PUT /api/penangkaran/:id", () => {
+    it("berhasil update data sebagai admin pusat", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
+        mockPenangkaran
+      );
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest
+              .fn()
+              .mockResolvedValue([
+                { ...mockPenangkaran, namaPenangkaran: "Penangkaran Updated" },
+              ]),
+          }),
+        }),
+      });
+
+      const res = await request(app)
+        .put("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockAdminToken}`)
+        .send({ ...mockBodyPenangkaran, namaPenangkaran: "Penangkaran Updated" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("gagal update jika data tidak ditemukan", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(null);
+
+      const res = await request(app)
+        .put("/api/penangkaran/999")
+        .set("Authorization", `Bearer ${mockAdminToken}`)
+        .send(mockBodyPenangkaran);
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("gagal update data milik orang lain sebagai bidang wilayah", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
+      // createdBy: 1 (admin), tapi yang request bidang (id: 2)
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
+        mockPenangkaran
+      );
+
+      const res = await request(app)
+        .put("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockBidangToken}`)
+        .send(mockBodyPenangkaran);
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("gagal update sebagai seksi wilayah", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockSeksiUser);
+
+      const res = await request(app)
+        .put("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockSeksiToken}`)
+        .send(mockBodyPenangkaran);
+
+      expect(res.status).toBe(403);
+    });
+  });
+  describe("DELETE /api/penangkaran/:id", () => {
+    it("berhasil hapus data sebagai admin pusat", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
+        mockPenangkaran
+      );
+      (mockDb.delete as jest.Mock).mockReturnValue({
+        where: jest.fn().mockResolvedValue(undefined),
+      });
+
+      const res = await request(app)
+        .delete("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockAdminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("gagal hapus jika data tidak ditemukan", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(null);
+
+      const res = await request(app)
+        .delete("/api/penangkaran/999")
+        .set("Authorization", `Bearer ${mockAdminToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("gagal hapus data milik orang lain sebagai bidang wilayah", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
+        mockPenangkaran
+      );
+
+      const res = await request(app)
+        .delete("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockBidangToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("gagal hapus sebagai seksi wilayah", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockSeksiUser);
+
+      const res = await request(app)
+        .delete("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockSeksiToken}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it("gagal hapus tanpa token", async () => {
+      const res = await request(app).delete("/api/penangkaran/1");
+
+      expect(res.status).toBe(401);
+    });
+  });
+});
