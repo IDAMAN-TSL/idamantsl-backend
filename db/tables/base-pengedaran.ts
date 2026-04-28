@@ -1,4 +1,4 @@
-import { serial, text, timestamp, integer, decimal } from "drizzle-orm/pg-core";
+import { serial, text, timestamp, integer} from "drizzle-orm/pg-core";
 import { statusVerifikasiEnum } from "../enums/enum";
 import { wilayah } from "./wilayah";
 import { referensiTsl } from "./referensi-tsl";

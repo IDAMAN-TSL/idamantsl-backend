@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/index";
 import { users } from "../../db/schema";
-import { randomInt } from "crypto";
+import { randomInt } from "node:crypto";
 
 export const login = async (req: Request, res: Response) => {
   try {
