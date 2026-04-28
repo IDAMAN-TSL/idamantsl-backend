@@ -2,11 +2,29 @@
   "name": "idaman",
   "version": "1.0.0",
   "main": "index.js",
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ],
+    "collectCoverage": true,
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "lcov",
+      "text"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.d.ts"
+    ]
+  },
   "scripts": {
     "dev": "tsx watch index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
-    "seed": "tsx db/seed.ts"
+    "seed": "tsx db/seed.ts",
+    "test": "cross-env NODE_ENV=test jest --forceExit"
   },
   "keywords": [],
   "author": "",
@@ -23,10 +41,17 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.6.0",
     "@types/pg": "^8.20.0",
+    "@types/supertest": "^7.2.0",
+    "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.10",
+    "jest": "^30.3.0",
+    "jest-mock-extended": "^4.0.1",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
