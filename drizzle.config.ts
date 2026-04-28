@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5432,
     user: "postgres",
     password: "postgres",
-    database: "fintech_db",
+    database: "idamantsl_db",
     ssl: false,
   },
 });
