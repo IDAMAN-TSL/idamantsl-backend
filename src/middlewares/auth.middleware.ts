@@ -17,7 +17,7 @@ export const authenticate = (
 ) => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({
       success: false,
       message: "Akses ditolak, token tidak ditemukan",
@@ -27,7 +27,8 @@ export const authenticate = (
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
+    const secret = process.env.JWT_SECRET ?? "";
+    const decoded = jwt.verify(token, secret) as {
       id: number;
       email: string;
       role: string;
@@ -37,9 +38,14 @@ export const authenticate = (
     req.user = decoded;
     next();
   } catch (error) {
+    const message =
+      error instanceof jwt.TokenExpiredError
+        ? "Token sudah kadaluarsa"
+        : "Token tidak valid atau sudah kadaluarsa";
+ 
     return res.status(401).json({
       success: false,
-      message: "Token tidak valid atau sudah kadaluarsa",
+      message,
     });
   }
 };

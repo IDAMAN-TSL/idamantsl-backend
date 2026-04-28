@@ -48,7 +48,7 @@ export const login = async (req: Request, res: Response) => {
         role: user.role,
         wilayahId: user.wilayahId,
       },
-      process.env.JWT_SECRET as string,
+      process.env.JWT_SECRET ?? "",
       { expiresIn: "7d" }
     );
     return res.status(200).json({
@@ -114,10 +114,6 @@ export const forgotPassword = async (req: Request, res: Response) => {
       })
       .where(eq(users.id, user.id));
 
-    // TODO: Kirim email (nanti diintegrasikan dengan nodemailer)
-    // Sementara token ditampilkan di response untuk testing
-    console.log(`Reset token untuk ${email}: ${resetToken}`);
-
     return res.status(200).json({
       success: true,
       message: "Jika email terdaftar, link reset password akan dikirim",
@@ -162,7 +158,7 @@ export const resetPassword = async (req: Request, res: Response) => {
       where: eq(users.email, email),
     });
 
-    if (!user || !user.resetToken || !user.resetTokenExpiry) {
+    if (!user?.resetToken || !user.resetTokenExpiry) {
       return res.status(400).json({
         success: false,
         message: "Token tidak valid",
