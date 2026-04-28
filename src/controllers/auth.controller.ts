@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/index";
 import { users } from "../../db/schema";
+import { randomInt } from "crypto";
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -102,8 +103,8 @@ export const forgotPassword = async (req: Request, res: Response) => {
       });
     }
 
-    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
-    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 menit
+    const resetToken = randomInt(100000, 999999).toString();
+    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); 
 
     await db
       .update(users)

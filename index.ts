@@ -10,6 +10,7 @@ const PORT = process.env.PORT;
 app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use(express.urlencoded({ extended: true }));
+app.disable("x-powered-by");
 
 app.get("/", (req, res) => {
   res.json({ message: "IDAMAN TSL API berjalan ✅" });
