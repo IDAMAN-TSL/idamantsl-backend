@@ -1,9 +1,12 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+export * from "./enums/enum";
 
-export const transactions = pgTable("transactions", {
-  id: serial("id").primaryKey(),
-  description: text("description"),
-  status: text("status"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+export * from "./tables/users";
+export * from "./tables/wilayah";
+export * from "./tables/referensi-tsl";
+export * from "./tables/penangkaran";
+export * from "./tables/pengedaran-dn";
+export * from "./tables/pengedaran-ln";
+export * from "./tables/lembaga-konservasi";
+export * from "./tables/verifikasi-log";
+
+export * from "./relations/relations";
