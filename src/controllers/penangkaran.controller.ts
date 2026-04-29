@@ -31,7 +31,19 @@ const withRelations = {
     columns: { id: true, nama: true, role: true },
   },
 } as const;
+const findPenangkaranById = async (id: number) => {
+  return await db.query.penangkaran.findFirst({
+    where: eq(penangkaran.id, id),
+  });
+};
 
+const isNotOwner = (
+  role: string | undefined,
+  createdBy: number | null,
+  userId: number | undefined
+): boolean => {
+  return role === "bidang_wilayah" && createdBy !== userId;
+};
 export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const data = await db.query.penangkaran.findMany({
@@ -127,30 +139,17 @@ export const createPenangkaran = async (req: AuthRequest, res: Response) => {
     });
   }
 };
-
 export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-
-    const existing = await db.query.penangkaran.findFirst({
-      where: eq(penangkaran.id, Number(id)),
-    });
+    const existing = await findPenangkaranById(Number(id));
 
     if (!existing) {
-      return res.status(404).json({
-        success: false,
-        message: "Data penangkaran tidak ditemukan",
-      });
+      return res.status(404).json({ success: false, message: "Data penangkaran tidak ditemukan" });
     }
 
-    if (
-      req.user?.role === "bidang_wilayah" &&
-      existing.createdBy !== req.user?.id
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Anda tidak memiliki izin mengubah data ini",
-      });
+    if (isNotOwner(req.user?.role, existing.createdBy, req.user?.id)) {
+      return res.status(403).json({ success: false, message: "Anda tidak memiliki izin mengubah data ini" });
     }
 
     const statusVerifikasi =
@@ -169,44 +168,28 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message:
-        statusVerifikasi === "pending"
-          ? "Data penangkaran berhasil diubah, menunggu verifikasi Admin Pusat"
-          : "Data penangkaran berhasil diubah",
+      message: statusVerifikasi === "pending"
+        ? "Data penangkaran berhasil diubah, menunggu verifikasi Admin Pusat"
+        : "Data penangkaran berhasil diubah",
       data,
     });
   } catch (error) {
     console.error("Update penangkaran error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
 
 export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-
-    const existing = await db.query.penangkaran.findFirst({
-      where: eq(penangkaran.id, Number(id)),
-    });
+    const existing = await findPenangkaranById(Number(id));
 
     if (!existing) {
-      return res.status(404).json({
-        success: false,
-        message: "Data penangkaran tidak ditemukan",
-      });
+      return res.status(404).json({ success: false, message: "Data penangkaran tidak ditemukan" });
     }
 
-    if (
-      req.user?.role === "bidang_wilayah" &&
-      existing.createdBy !== req.user?.id
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Anda tidak memiliki izin menghapus data ini",
-      });
+    if (isNotOwner(req.user?.role, existing.createdBy, req.user?.id)) {
+      return res.status(403).json({ success: false, message: "Anda tidak memiliki izin menghapus data ini" });
     }
 
     await db.delete(penangkaran).where(eq(penangkaran.id, Number(id)));
@@ -217,9 +200,6 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error("Delete penangkaran error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
