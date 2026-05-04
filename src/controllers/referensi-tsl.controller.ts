@@ -11,6 +11,9 @@ interface AuthUser {
 interface AuthRequest extends Request {
   user?: AuthUser;
 }
+
+const VALID_JENIS = ["tumbuhan", "satwa_liar"];
+
 async function findReferensiById(id: number) {
   const result = await db
     .select()
@@ -22,77 +25,59 @@ async function findReferensiById(id: number) {
 
 function buildReferensiFields(body: Request["body"]) {
   const {
-    nomor,
-    namaDaerah,
-    jenis,
-    kingdom,
-    divisi,
-    kelas,
-    ordo,
-    famili,
-    genus,
-    spesies,
-    statusPerlindunganNasional,
-    statusCites,
-    statusIucn,
-    catatanVerifikasi,
+    nomor, namaDaerah, jenis, kingdom, divisi, kelas, ordo,
+    famili, genus, spesies, statusPerlindunganNasional,
+    statusCites, statusIucn, catatanVerifikasi,
   } = body;
 
   return {
-    nomor,
-    namaDaerah,
-    jenis,
-    kingdom,
-    divisi,
-    kelas,
-    ordo,
-    famili,
-    genus,
-    spesies,
-    statusPerlindunganNasional,
-    statusCites,
-    statusIucn,
-    catatanVerifikasi,
+    nomor, namaDaerah, jenis, kingdom, divisi, kelas, ordo,
+    famili, genus, spesies, statusPerlindunganNasional,
+    statusCites, statusIucn, catatanVerifikasi,
   };
 }
 
 function isNotOwner(role: string, createdBy: number | null, userId: number) {
   return role === "bidang_wilayah" && createdBy !== userId;
 }
+
+const SELECT_FIELDS = {
+  id: referensiTsl.id,
+  nomor: referensiTsl.nomor,
+  namaDaerah: referensiTsl.namaDaerah,
+  jenis: referensiTsl.jenis,
+  kingdom: referensiTsl.kingdom,
+  divisi: referensiTsl.divisi,
+  kelas: referensiTsl.kelas,
+  ordo: referensiTsl.ordo,
+  famili: referensiTsl.famili,
+  genus: referensiTsl.genus,
+  spesies: referensiTsl.spesies,
+  statusPerlindunganNasional: referensiTsl.statusPerlindunganNasional,
+  statusCites: referensiTsl.statusCites,
+  statusIucn: referensiTsl.statusIucn,
+  statusVerifikasi: referensiTsl.statusVerifikasi,
+  catatanVerifikasi: referensiTsl.catatanVerifikasi,
+  createdBy: referensiTsl.createdBy,
+  namaInputor: users.nama,
+  createdAt: referensiTsl.createdAt,
+  updatedAt: referensiTsl.updatedAt,
+};
+
 export async function getAllReferensi(req: AuthRequest, res: Response): Promise<void> {
   try {
     const result = await db
-      .select({
-        id: referensiTsl.id,
-        nomor: referensiTsl.nomor,
-        namaDaerah: referensiTsl.namaDaerah,
-        jenis: referensiTsl.jenis,
-        kingdom: referensiTsl.kingdom,
-        divisi: referensiTsl.divisi,
-        kelas: referensiTsl.kelas,
-        ordo: referensiTsl.ordo,
-        famili: referensiTsl.famili,
-        genus: referensiTsl.genus,
-        spesies: referensiTsl.spesies,
-        statusPerlindunganNasional: referensiTsl.statusPerlindunganNasional,
-        statusCites: referensiTsl.statusCites,
-        statusIucn: referensiTsl.statusIucn,
-        statusVerifikasi: referensiTsl.statusVerifikasi,
-        catatanVerifikasi: referensiTsl.catatanVerifikasi,
-        createdBy: referensiTsl.createdBy,
-        namaInputor: users.nama,
-        createdAt: referensiTsl.createdAt,
-        updatedAt: referensiTsl.updatedAt,
-      })
+      .select(SELECT_FIELDS)
       .from(referensiTsl)
       .leftJoin(users, eq(referensiTsl.createdBy, users.id))
       .orderBy(referensiTsl.createdAt);
-      
+
     res.status(200).json({ data: result });
   } catch {
     res.status(500).json({ message: "Gagal mengambil data referensi TSL" });
   }
 }
+
 export async function getReferensiById(req: AuthRequest, res: Response): Promise<void> {
   try {
     const id = Number(req.params.id);
@@ -102,28 +87,7 @@ export async function getReferensiById(req: AuthRequest, res: Response): Promise
     }
 
     const result = await db
-      .select({
-        id: referensiTsl.id,
-        nomor: referensiTsl.nomor,
-        namaDaerah: referensiTsl.namaDaerah,
-        jenis: referensiTsl.jenis,
-        kingdom: referensiTsl.kingdom,
-        divisi: referensiTsl.divisi,
-        kelas: referensiTsl.kelas,
-        ordo: referensiTsl.ordo,
-        famili: referensiTsl.famili,
-        genus: referensiTsl.genus,
-        spesies: referensiTsl.spesies,
-        statusPerlindunganNasional: referensiTsl.statusPerlindunganNasional,
-        statusCites: referensiTsl.statusCites,
-        statusIucn: referensiTsl.statusIucn,
-        statusVerifikasi: referensiTsl.statusVerifikasi,
-        catatanVerifikasi: referensiTsl.catatanVerifikasi,
-        createdBy: referensiTsl.createdBy,
-        namaInputor: users.nama,
-        createdAt: referensiTsl.createdAt,
-        updatedAt: referensiTsl.updatedAt,
-      })
+      .select(SELECT_FIELDS)
       .from(referensiTsl)
       .leftJoin(users, eq(referensiTsl.createdBy, users.id))
       .where(eq(referensiTsl.id, id))
@@ -139,6 +103,7 @@ export async function getReferensiById(req: AuthRequest, res: Response): Promise
     res.status(500).json({ message: "Gagal mengambil data referensi TSL" });
   }
 }
+
 export async function createReferensi(req: AuthRequest, res: Response): Promise<void> {
   try {
     const user = req.user!;
@@ -149,32 +114,24 @@ export async function createReferensi(req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const validJenis = ["tumbuhan", "satwa_liar"];
-    if (!validJenis.includes(fields.jenis)) {
+    if (!VALID_JENIS.includes(fields.jenis)) {
       res.status(400).json({ message: "Jenis TSL tidak valid" });
       return;
     }
 
-    // admin_pusat → langsung disetujui, bidang_wilayah → pending
     const statusVerifikasi = user.role === "admin_pusat" ? "disetujui" : "pending";
 
     const [newData] = await db
       .insert(referensiTsl)
-      .values({
-        ...fields,
-        statusVerifikasi,
-        createdBy: user.id,
-      })
+      .values({ ...fields, statusVerifikasi, createdBy: user.id })
       .returning();
 
-    res.status(201).json({
-      message: "Referensi TSL berhasil ditambahkan",
-      data: newData,
-    });
+    res.status(201).json({ message: "Referensi TSL berhasil ditambahkan", data: newData });
   } catch {
     res.status(500).json({ message: "Gagal menambahkan referensi TSL" });
   }
 }
+
 export async function updateReferensi(req: AuthRequest, res: Response): Promise<void> {
   try {
     const id = Number(req.params.id);
@@ -182,21 +139,20 @@ export async function updateReferensi(req: AuthRequest, res: Response): Promise<
       res.status(400).json({ message: "ID tidak valid" });
       return;
     }
- 
+
     const user = req.user!;
     const existing = await findReferensiById(id);
- 
+
     if (!existing) {
       res.status(404).json({ message: "Referensi TSL tidak ditemukan" });
       return;
     }
- 
+
     if (isNotOwner(user.role, existing.createdBy, user.id)) {
       res.status(403).json({ message: "Tidak memiliki akses untuk mengubah data ini" });
       return;
     }
- 
-    // Aturan akses bidang_wilayah berdasarkan statusVerifikasi
+
     if (user.role === "bidang_wilayah") {
       if (existing.statusVerifikasi === "pending") {
         res.status(403).json({ message: "Data sedang menunggu persetujuan admin, tidak bisa diubah" });
@@ -209,45 +165,31 @@ export async function updateReferensi(req: AuthRequest, res: Response): Promise<
         });
         return;
       }
- 
-      // statusVerifikasi === "disetujui" → simpan sebagai draft, tunggu persetujuan admin
+
       const fields = buildReferensiFields(req.body);
-      if (fields.jenis) {
-        const validJenis = ["tumbuhan", "satwa_liar"];
-        if (!validJenis.includes(fields.jenis)) {
-          res.status(400).json({ message: "Jenis TSL tidak valid" });
-          return;
-        }
-      }
- 
-      const [updated] = await db
-        .update(referensiTsl)
-        .set({
-          pendingChanges: fields,
-          statusVerifikasi: "pending",
-          updatedAt: new Date(),
-        })
-        .where(eq(referensiTsl.id, id))
-        .returning();
- 
-      res.status(200).json({
-        message: "Perubahan telah diajukan, menunggu persetujuan admin",
-        data: updated,
-      });
-      return;
-    }
- 
-    // admin_pusat → langsung update data utama
-    const fields = buildReferensiFields(req.body);
- 
-    if (fields.jenis) {
-      const validJenis = ["tumbuhan", "satwa_liar"];
-      if (!validJenis.includes(fields.jenis)) {
+      if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
         res.status(400).json({ message: "Jenis TSL tidak valid" });
         return;
       }
+
+      const [updated] = await db
+        .update(referensiTsl)
+        .set({ pendingChanges: fields, statusVerifikasi: "pending", updatedAt: new Date() })
+        .where(eq(referensiTsl.id, id))
+        .returning();
+
+      res.status(200).json({ message: "Perubahan telah diajukan, menunggu persetujuan admin", data: updated });
+      return;
     }
- 
+
+    // admin_pusat → langsung update
+    const fields = buildReferensiFields(req.body);
+
+    if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
+      res.status(400).json({ message: "Jenis TSL tidak valid" });
+      return;
+    }
+
     const updateData: Partial<typeof referensiTsl.$inferInsert> = {};
     if (fields.nomor !== undefined) updateData.nomor = fields.nomor;
     if (fields.namaDaerah) updateData.namaDaerah = fields.namaDaerah;
@@ -263,21 +205,19 @@ export async function updateReferensi(req: AuthRequest, res: Response): Promise<
     if (fields.statusCites !== undefined) updateData.statusCites = fields.statusCites;
     if (fields.statusIucn !== undefined) updateData.statusIucn = fields.statusIucn;
     if (fields.catatanVerifikasi !== undefined) updateData.catatanVerifikasi = fields.catatanVerifikasi;
- 
+
     const [updated] = await db
       .update(referensiTsl)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(referensiTsl.id, id))
       .returning();
- 
-    res.status(200).json({
-      message: "Referensi TSL berhasil diperbarui",
-      data: updated,
-    });
+
+    res.status(200).json({ message: "Referensi TSL berhasil diperbarui", data: updated });
   } catch {
     res.status(500).json({ message: "Gagal memperbarui referensi TSL" });
   }
 }
+
 export async function deleteReferensi(req: AuthRequest, res: Response): Promise<void> {
   try {
     const id = Number(req.params.id);
@@ -294,12 +234,11 @@ export async function deleteReferensi(req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    if (user.role === "bidang_wilayah" ) {
+    if (user.role === "bidang_wilayah") {
       if (existing.statusVerifikasi === "pending") {
         res.status(403).json({ message: "Data sedang menunggu persetujuan admin, tidak bisa dihapus" });
         return;
       }
-
       if (existing.statusVerifikasi === "ditolak") {
         res.status(403).json({
           message: "Data ditolak oleh admin",
@@ -308,24 +247,17 @@ export async function deleteReferensi(req: AuthRequest, res: Response): Promise<
         return;
       }
 
-      // statusVerifikasi === "disetujui" → ajukan penghapusan
       await db
         .update(referensiTsl)
-        .set({
-          pendingChanges: { _action: "delete" },
-          statusVerifikasi: "pending",
-          updatedAt: new Date(),
-        })
+        .set({ pendingChanges: { _action: "delete" }, statusVerifikasi: "pending", updatedAt: new Date() })
         .where(eq(referensiTsl.id, id));
 
       res.status(200).json({ message: "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin" });
       return;
     }
 
-    // admin_pusat → langsung hapus
     await db.delete(referensiTsl).where(eq(referensiTsl.id, id));
     res.status(200).json({ message: "Referensi TSL berhasil dihapus" });
-
   } catch {
     res.status(500).json({ message: "Gagal menghapus referensi TSL" });
   }

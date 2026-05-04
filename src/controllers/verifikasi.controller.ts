@@ -18,7 +18,13 @@ type TabelTarget =
   | "pengedaran_dalam_negeri"
   | "pengedaran_luar_negeri"
   | "lembaga_konservasi";
-
+const VALID_TABEL: TabelTarget[] = [
+  "referensi_tsl",
+  "penangkaran",
+  "pengedaran_dalam_negeri",
+  "pengedaran_luar_negeri",
+  "lembaga_konservasi",
+];
 async function findRecord(tabel: TabelTarget, targetId: number) {
   switch (tabel) {
     case "referensi_tsl":
@@ -29,33 +35,34 @@ async function findRecord(tabel: TabelTarget, targetId: number) {
       return null;
   }
 }
-async function applyChanges(tabel: TabelTarget, targetId: number, changes: Record<string, unknown>) {
+// Helper generik untuk update berdasarkan tabel
+async function updateRecord(tabel: TabelTarget, targetId: number, data: Record<string, unknown>) {
   switch (tabel) {
     case "referensi_tsl":
-      await db.update(referensiTsl)
-        .set({ ...changes, pendingChanges: null, statusVerifikasi: "disetujui", updatedAt: new Date() })
-        .where(eq(referensiTsl.id, targetId));
+      await db.update(referensiTsl).set(data).where(eq(referensiTsl.id, targetId));
       break;
     case "penangkaran":
-      await db.update(penangkaran)
-        .set({ ...changes, statusVerifikasi: "disetujui", updatedAt: new Date() })
-        .where(eq(penangkaran.id, targetId));
+      await db.update(penangkaran).set(data).where(eq(penangkaran.id, targetId));
       break;
   }
 }
+
+async function applyChanges(tabel: TabelTarget, targetId: number, changes: Record<string, unknown>) {
+  await updateRecord(tabel, targetId, {
+    ...changes,
+    pendingChanges: null,
+    statusVerifikasi: "disetujui",
+    updatedAt: new Date(),
+  });
+}
+
 async function rejectRecord(tabel: TabelTarget, targetId: number, catatan: string) {
-  switch (tabel) {
-    case "referensi_tsl":
-      await db.update(referensiTsl)
-        .set({ statusVerifikasi: "ditolak", catatanVerifikasi: catatan, pendingChanges: null, updatedAt: new Date() })
-        .where(eq(referensiTsl.id, targetId));
-      break;
-    case "penangkaran":
-      await db.update(penangkaran)
-        .set({ statusVerifikasi: "ditolak", catatanVerifikasi: catatan, updatedAt: new Date() })
-        .where(eq(penangkaran.id, targetId));
-      break;
-  }
+  await updateRecord(tabel, targetId, {
+    statusVerifikasi: "ditolak",
+    catatanVerifikasi: catatan,
+    pendingChanges: null,
+    updatedAt: new Date(),
+  });
 }
 async function deleteRecord(tabel: TabelTarget, targetId: number) {
   switch (tabel) {
@@ -77,15 +84,7 @@ export async function approveData(req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const validTabel: TabelTarget[] = [
-      "referensi_tsl",
-      "penangkaran",
-      "pengedaran_dalam_negeri",
-      "pengedaran_luar_negeri",
-      "lembaga_konservasi",
-    ];
-
-    if (!validTabel.includes(tabelTarget)) {
+    if (!VALID_TABEL.includes(tabelTarget)) {
       res.status(400).json({ message: "tabelTarget tidak valid" });
       return;
     }
@@ -154,15 +153,7 @@ export async function tolakData(req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    const validTabel: TabelTarget[] = [
-      "referensi_tsl",
-      "penangkaran",
-      "pengedaran_dalam_negeri",
-      "pengedaran_luar_negeri",
-      "lembaga_konservasi",
-    ];
-
-    if (!validTabel.includes(tabelTarget)) {
+    if (!VALID_TABEL.includes(tabelTarget)) {
       res.status(400).json({ message: "tabelTarget tidak valid" });
       return;
     }
