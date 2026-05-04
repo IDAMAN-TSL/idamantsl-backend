@@ -3,6 +3,8 @@ import express from "express";
 import authRoutes from "./src/routes/auth.routes";
 import penangkaranRoutes from "./src/routes/penangkaran.routes";
 import userRoutes from "./src/routes/user.routes";
+import referensiTslRoutes from "./src/routes/referensi-tsl.routes";
+import verifikasiRoutes from "./src/routes/verifikasi.routes";
 
 dotenv.config();
 
@@ -15,6 +17,8 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/referensi-tsl", referensiTslRoutes);
+app.use("/api/verifikasi", verifikasiRoutes);
 app.use("/api/penangkaran", penangkaranRoutes);
 
 app.get("/", (req, res) => {
