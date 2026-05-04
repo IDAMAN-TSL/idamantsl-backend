@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import express from "express";
 import authRoutes from "./src/routes/auth.routes";
 import penangkaranRoutes from "./src/routes/penangkaran.routes";
+import userRoutes from "./src/routes/user.routes";
 
 dotenv.config();
 
@@ -13,6 +14,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/penangkaran", penangkaranRoutes);
 
 app.get("/", (req, res) => {
