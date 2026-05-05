@@ -57,3 +57,9 @@ export const tipeWilayahEnum = pgEnum("tipe_wilayah", [
   "bidang", // Bidang Wilayah I, II, III
   "seksi",  // Seksi Wilayah I, II, III, IV, V, VI
 ]);
+//verifikasi log
+export const jenisPengajuanEnum = pgEnum("jenis_pengajuan", [
+  "tambah",
+  "perbarui",
+  "hapus",
+]);
