@@ -54,6 +54,7 @@ const SELECT_FIELDS = {
   statusIucn: referensiTsl.statusIucn,
   statusVerifikasi: referensiTsl.statusVerifikasi,
   catatanVerifikasi: referensiTsl.catatanVerifikasi,
+  pendingChanges: referensiTsl.pendingChanges,
   createdBy: referensiTsl.createdBy,
   namaInputor: users.nama,
   createdAt: referensiTsl.createdAt,
