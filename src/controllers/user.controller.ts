@@ -1,0 +1,254 @@
+import { Request, Response } from "express";
+import { eq, and, ne } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import { db } from "../../db";
+import { users, wilayah } from "../../db/schema";
+
+async function findUserById(id: number) {
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+function buildUserFields(body: Request["body"]) {
+  const { nama, email, role, wilayahId, password } = body;
+  return { nama, email, role, wilayahId, password };
+}
+
+function omitPassword<T extends { password?: unknown }>(user: T) {
+  const { password: _, ...safe } = user;
+  return safe;
+}
+export async function getAllUsers(req: Request, res: Response): Promise<void> {
+  try {
+    const result = await db
+      .select({
+        id: users.id,
+        nama: users.nama,
+        email: users.email,
+        role: users.role,
+        wilayahId: users.wilayahId,
+        namaWilayah: wilayah.namaWilayah,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
+      .orderBy(users.createdAt);
+
+    res.status(200).json({ data: result });
+  } catch {
+    res.status(500).json({ message: "Gagal mengambil data users" });
+  }
+}
+export async function getUserById(req: Request, res: Response): Promise<void> {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ message: "ID tidak valid" });
+      return;
+    }
+
+    const result = await db
+      .select({
+        id: users.id,
+        nama: users.nama,
+        email: users.email,
+        role: users.role,
+        wilayahId: users.wilayahId,
+        namaWilayah: wilayah.namaWilayah,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (!result[0]) {
+      res.status(404).json({ message: "User tidak ditemukan" });
+      return;
+    }
+
+    res.status(200).json({ data: result[0] });
+  } catch {
+    res.status(500).json({ message: "Gagal mengambil data user" });
+  }
+}
+export async function createUser(req: Request, res: Response): Promise<void> {
+  try {
+    const { nama, email, role, wilayahId, password } = buildUserFields(req.body);
+
+    if (!nama || !email || !role || !password) {
+      res.status(400).json({ message: "Nama, email, role, dan password wajib diisi" });
+      return;
+    }
+
+    const validRoles = ["admin_pusat", "bidang_wilayah", "seksi_wilayah"];
+    if (!validRoles.includes(role)) {
+      res.status(400).json({ message: "Role tidak valid" });
+      return;
+    }
+    if (role !== "admin_pusat" && !wilayahId) {
+      res.status(400).json({ message: "wilayahId wajib diisi untuk role ini" });
+      return;
+    }
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (existing[0]) {
+      res.status(409).json({ message: "Email sudah terdaftar" });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        nama,
+        email,
+        role,
+        wilayahId: wilayahId ?? null,
+        password: hashedPassword,
+      })
+      .returning({
+        id: users.id,
+        nama: users.nama,
+        email: users.email,
+        role: users.role,
+        wilayahId: users.wilayahId,
+        createdAt: users.createdAt,
+      });
+
+    res.status(201).json({ message: "User berhasil dibuat", data: newUser });
+  } catch {
+    res.status(500).json({ message: "Gagal membuat user" });
+  }
+}
+export async function updateUser(req: Request, res: Response): Promise<void> {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ message: "ID tidak valid" });
+      return;
+    }
+
+    const existing = await findUserById(id);
+    if (!existing) {
+      res.status(404).json({ message: "User tidak ditemukan" });
+      return;
+    }
+
+    const { nama, email, role, wilayahId } = buildUserFields(req.body);
+    if (role) {
+      const validRoles = ["admin_pusat", "bidang_wilayah", "seksi_wilayah"];
+      if (!validRoles.includes(role)) {
+        res.status(400).json({ message: "Role tidak valid" });
+        return;
+      }
+    }
+    if (email) {
+      const duplicate = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, email), ne(users.id, id)))
+        .limit(1);
+
+      if (duplicate[0]) {
+        res.status(409).json({ message: "Email sudah digunakan user lain" });
+        return;
+      }
+    }
+
+    const updateData: Partial<typeof users.$inferInsert> = {};
+    if (nama) updateData.nama = nama;
+    if (email) updateData.email = email;
+    if (role) updateData.role = role;
+    if (wilayahId !== undefined) updateData.wilayahId = wilayahId;
+
+    const [updated] = await db
+      .update(users)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        nama: users.nama,
+        email: users.email,
+        role: users.role,
+        wilayahId: users.wilayahId,
+        updatedAt: users.updatedAt,
+      });
+
+    res.status(200).json({ message: "User berhasil diperbarui", data: updated });
+  } catch {
+    res.status(500).json({ message: "Gagal memperbarui user" });
+  }
+}
+export async function deleteUser(req: Request, res: Response): Promise<void> {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ message: "ID tidak valid" });
+      return;
+    }
+
+    // Cegah admin hapus dirinya sendiri
+    const requesterId = (req as Request & { user?: { id: number } }).user?.id;
+    if (requesterId === id) {
+      res.status(400).json({ message: "Tidak bisa menghapus akun sendiri" });
+      return;
+    }
+
+    const existing = await findUserById(id);
+    if (!existing) {
+      res.status(404).json({ message: "User tidak ditemukan" });
+      return;
+    }
+
+    await db.delete(users).where(eq(users.id, id));
+
+    res.status(200).json({ message: "User berhasil dihapus" });
+  } catch {
+    res.status(500).json({ message: "Gagal menghapus user" });
+  }
+}
+
+export async function adminResetPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ message: "ID tidak valid" });
+      return;
+    }
+
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 8) {
+      res.status(400).json({ message: "Password baru minimal 8 karakter" });
+      return;
+    }
+
+    const existing = await findUserById(id);
+    if (!existing) {
+      res.status(404).json({ message: "User tidak ditemukan" });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await db
+      .update(users)
+      .set({ password: hashedPassword, updatedAt: new Date() })
+      .where(eq(users.id, id));
+
+    res.status(200).json({ message: "Password berhasil direset oleh admin" });
+  } catch {
+    res.status(500).json({ message: "Gagal mereset password" });
+  }
+}
