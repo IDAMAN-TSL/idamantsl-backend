@@ -11,7 +11,6 @@ jest.mock("../db/index", () => ({
   },
 }));
 
-// Mock jsonwebtoken
 jest.mock("jsonwebtoken", () => ({
   sign: jest.fn(() => "mocked_token"),
   verify: jest.fn(),
@@ -32,31 +31,54 @@ jest.mock("jsonwebtoken", () => ({
 import jwt from "jsonwebtoken";
 const mockDb = db as jest.Mocked<typeof db>;
 
-// Mock users
-const mockAdminUser = { id: 1, email: "admin@bbksda-jabar.id", role: "admin_pusat", wilayahId: null };
-const mockBidangUser = { id: 2, email: "budi@bbksda-jabar.id", role: "bidang_wilayah", wilayahId: 1 };
+const mockAdminUser  = { id: 1, email: "admin@bbksda-jabar.id", role: "admin_pusat",    wilayahId: null };
+const mockBidangUser = { id: 2, email: "budi@bbksda-jabar.id",  role: "bidang_wilayah", wilayahId: 1 };
 
-// Mock data pending
+// ─── Mock data ────────────────────────────────────────────────────────────────
+
 const mockReferensiPending = {
   id: 1,
   namaDaerah: "Harimau Jawa",
   jenis: "satwa_liar",
   statusVerifikasi: "pending",
-  pendingChanges: null,
+  pendingChanges: null,       // null → jenisPengajuan = "tambah"
   createdBy: 2,
   updatedAt: new Date(),
+};
+
+const mockReferensiPendingPerbarui = {
+  ...mockReferensiPending,
+  pendingChanges: { namaDaerah: "Harimau Jawa Baru" }, // ada key → jenisPengajuan = "perbarui"
+};
+
+const mockReferensiPendingHapus = {
+  ...mockReferensiPending,
+  pendingChanges: { _action: "delete" },               // _action delete → jenisPengajuan = "hapus"
+};
+
+const mockReferensiPendingNoCreatedBy = {
+  ...mockReferensiPending,
+  createdBy: null,             // null → getNamaInputor tidak dipanggil
 };
 
 const mockPenangkaranPending = {
   id: 1,
   namaPenangkaran: "Penangkaran Rusa Timor",
   statusVerifikasi: "pending",
+  pendingChanges: null,
   createdBy: 2,
   updatedAt: new Date(),
 };
 
-// Helper setup mock select chain
-const mockSelectChain = (returnValue: unknown[]) => ({
+const mockAllUsers = [
+  { id: 1, nama: "Admin BBKSDA Jabar" },
+  { id: 2, nama: "Budi Santoso" },
+];
+
+// ─── Mock chain helpers ───────────────────────────────────────────────────────
+
+/** select().from().where().limit() → untuk find() di TABLE_REGISTRY */
+const mockSelectLimitChain = (returnValue: unknown[]) => ({
   from: jest.fn().mockReturnValue({
     where: jest.fn().mockReturnValue({
       limit: jest.fn().mockResolvedValue(returnValue),
@@ -64,51 +86,96 @@ const mockSelectChain = (returnValue: unknown[]) => ({
   }),
 });
 
-const mockSelectManyChain = (returnValue: unknown[]) => ({
+/** select({...}).from().where() → untuk getDataPending / getDataApproved */
+const mockSelectWhereChain = (returnValue: unknown[]) => ({
   from: jest.fn().mockReturnValue({
     where: jest.fn().mockResolvedValue(returnValue),
   }),
 });
 
-// Helper setup mock update chain
+/** select({...}).from() → untuk ambil semua users (userMap) */
+const mockSelectFromChain = (returnValue: unknown[]) => ({
+  from: jest.fn().mockResolvedValue(returnValue),
+});
+
+/** select().from().orderBy() → untuk getVerifikasiLog */
+const mockSelectOrderByChain = (returnValue: unknown[]) => ({
+  from: jest.fn().mockReturnValue({
+    orderBy: jest.fn().mockResolvedValue(returnValue),
+  }),
+});
+
+/** select().from().where().limit() single-use untuk getNamaInputor */
+const mockSelectNamaInputorChain = (returnValue: unknown[]) => ({
+  from: jest.fn().mockReturnValue({
+    where: jest.fn().mockReturnValue({
+      limit: jest.fn().mockResolvedValue(returnValue),
+    }),
+  }),
+});
+
 const mockUpdateChain = () => ({
   set: jest.fn().mockReturnValue({
     where: jest.fn().mockResolvedValue(undefined),
   }),
 });
 
-// Helper setup mock insert chain
 const mockInsertChain = () => ({
   values: jest.fn().mockResolvedValue(undefined),
 });
 
-// Helper setup mock delete chain
 const mockDeleteChain = () => ({
   where: jest.fn().mockResolvedValue(undefined),
 });
 
+// ─── Helper: setup getDataPending mock (3 db.select calls) ───────────────────
+// Urutan pemanggilan db.select di getDataPending:
+//   [0] referensiTsl.where("pending")  → mockSelectWhereChain
+//   [1] penangkaran.where("pending")   → mockSelectWhereChain
+//   [2] users (userMap)                → mockSelectFromChain
+
+function setupPendingMock(
+  referensiList: unknown[],
+  penangkaranList: unknown[],
+  userList = mockAllUsers
+) {
+  (mockDb.select as jest.Mock)
+    .mockReturnValueOnce(mockSelectWhereChain(referensiList))
+    .mockReturnValueOnce(mockSelectWhereChain(penangkaranList))
+    .mockReturnValueOnce(mockSelectFromChain(userList));
+}
+
+// ─── Helper: setup getDataApproved mock (2 db.select calls) ──────────────────
+// Urutan:
+//   [0] referensiTsl.where("disetujui") → mockSelectWhereChain
+//   [1] penangkaran.where("disetujui")  → mockSelectWhereChain
+
+function setupApprovedMock(referensiList: unknown[], penangkaranList: unknown[]) {
+  (mockDb.select as jest.Mock)
+    .mockReturnValueOnce(mockSelectWhereChain(referensiList))
+    .mockReturnValueOnce(mockSelectWhereChain(penangkaranList));
+}
+
+// ─── Helper: setup approveData / tolakData mock ───────────────────────────────
+// find() di TABLE_REGISTRY memanggil: select().from().where().limit()
+
+function setupActionMock(record: unknown) {
+  (mockDb.select as jest.Mock).mockReturnValue(mockSelectLimitChain(record ? [record] : []));
+}
+
 describe("Verifikasi Endpoints", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  beforeEach(() => jest.resetAllMocks()); // resetAllMocks: clear calls DAN restore implementasi, mencegah mockImplementation throw dari test 500 bocor ke test berikutnya
 
   // =============================================
-  // GET DATA PENDING
+  // GET /api/verifikasi/pending
   // =============================================
 
   describe("GET /api/verifikasi/pending", () => {
-    it("berhasil ambil data pending sebagai admin pusat", async () => {
-      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
 
-      (mockDb.select as jest.Mock)
-        .mockReturnValueOnce(mockSelectManyChain([mockReferensiPending]))
-        .mockReturnValueOnce(mockSelectManyChain([mockPenangkaranPending]))
-        .mockReturnValueOnce({
-          from: jest.fn().mockResolvedValue([
-            { id: 1, nama: "Admin BBKSDA Jabar" },
-            { id: 2, nama: "Budi Santoso" },
-          ]),
-        });
+    it("200 - berhasil ambil data pending, jenisPengajuan = tambah (pendingChanges null)", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      // pendingChanges null → getJenisPengajuan → "tambah"
+      setupPendingMock([mockReferensiPending], [mockPenangkaranPending]);
 
       const res = await request(app)
         .get("/api/verifikasi/pending")
@@ -117,14 +184,79 @@ describe("Verifikasi Endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveProperty("referensi_tsl");
       expect(res.body.data).toHaveProperty("penangkaran");
+      expect(res.body.data.referensi_tsl[0].jenisPengajuan).toBe("tambah");
+      expect(res.body.total).toBe(2);
     });
 
-    it("gagal tanpa token", async () => {
+    it("200 - jenisPengajuan = perbarui (pendingChanges punya key selain _action)", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      // pendingChanges ada key → getJenisPengajuan → "perbarui"
+      setupPendingMock([mockReferensiPendingPerbarui], []);
+
+      const res = await request(app)
+        .get("/api/verifikasi/pending")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.referensi_tsl[0].jenisPengajuan).toBe("perbarui");
+    });
+
+    it("200 - jenisPengajuan = hapus (pendingChanges._action === 'delete')", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      // pendingChanges._action = delete → getJenisPengajuan → "hapus"
+      setupPendingMock([mockReferensiPendingHapus], []);
+
+      const res = await request(app)
+        .get("/api/verifikasi/pending")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.referensi_tsl[0].jenisPengajuan).toBe("hapus");
+    });
+
+    it("200 - createdBy null → namaInputor null (tidak lookup ke userMap)", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      // createdBy null → r.createdBy ? (...) : null → namaInputor = null
+      setupPendingMock([mockReferensiPendingNoCreatedBy], []);
+
+      const res = await request(app)
+        .get("/api/verifikasi/pending")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.referensi_tsl[0].namaInputor).toBeNull();
+    });
+
+    it("200 - data pending kosong di semua tabel", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupPendingMock([], []);
+
+      const res = await request(app)
+        .get("/api/verifikasi/pending")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(0);
+    });
+
+    it("500 - error server saat query gagal", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
+
+      const res = await request(app)
+        .get("/api/verifikasi/pending")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal mengambil data pending");
+    });
+
+    it("401 - tanpa token", async () => {
       const res = await request(app).get("/api/verifikasi/pending");
       expect(res.status).toBe(401);
     });
 
-    it("gagal jika bukan admin pusat", async () => {
+    it("403 - bukan admin_pusat", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
 
       const res = await request(app)
@@ -136,15 +268,81 @@ describe("Verifikasi Endpoints", () => {
   });
 
   // =============================================
-  // APPROVE DATA
+  // GET /api/verifikasi/approved
+  // =============================================
+
+  describe("GET /api/verifikasi/approved", () => {
+
+    it("200 - berhasil ambil data approved dari semua tabel", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupApprovedMock(
+        [{ ...mockReferensiPending, statusVerifikasi: "disetujui" }],
+        [{ ...mockPenangkaranPending, statusVerifikasi: "disetujui" }]
+      );
+
+      const res = await request(app)
+        .get("/api/verifikasi/approved")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty("referensi_tsl");
+      expect(res.body.data).toHaveProperty("penangkaran");
+      expect(res.body.total).toBe(2);
+    });
+
+    it("200 - data approved kosong", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupApprovedMock([], []);
+
+      const res = await request(app)
+        .get("/api/verifikasi/approved")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(0);
+    });
+
+    it("500 - error server saat query gagal", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
+
+      const res = await request(app)
+        .get("/api/verifikasi/approved")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal mengambil data approved");
+    });
+
+    it("401 - tanpa token", async () => {
+      const res = await request(app).get("/api/verifikasi/approved");
+      expect(res.status).toBe(401);
+    });
+
+    it("200 - semua role yang login bisa akses approved (tidak ada guard authorize)", async () => {
+      // Route /approved hanya dilindungi authenticate, tidak ada authorize("admin_pusat")
+      // sehingga bidang_wilayah pun bisa akses dan dapat data
+      (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
+      setupApprovedMock([], []);
+
+      const res = await request(app)
+        .get("/api/verifikasi/approved")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+    });
+
+  });
+
+  // =============================================
+  // POST /api/verifikasi/approve
   // =============================================
 
   describe("POST /api/verifikasi/approve", () => {
-    it("berhasil approve data referensi_tsl", async () => {
+
+    it("200 - approve data baru (pendingChanges null → jenisPengajuan tambah)", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue(
-        mockSelectChain([{ ...mockReferensiPending, statusVerifikasi: "pending" }])
-      );
+      setupActionMock(mockReferensiPending); // pendingChanges: null
       (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
       (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
 
@@ -157,15 +355,24 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.message).toBe("Data berhasil disetujui");
     });
 
-    it("berhasil approve pengajuan penghapusan", async () => {
+    it("200 - approve perubahan data (pendingChanges ada key → jenisPengajuan perbarui)", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue(
-        mockSelectChain([{
-          ...mockReferensiPending,
-          statusVerifikasi: "pending",
-          pendingChanges: { _action: "delete" },
-        }])
-      );
+      setupActionMock(mockReferensiPendingPerbarui); // pendingChanges: { namaDaerah: "..." }
+      (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/approve")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "Sudah sesuai" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Data berhasil disetujui");
+    });
+
+    it("200 - approve pengajuan penghapusan (pendingChanges._action = delete)", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock(mockReferensiPendingHapus); // pendingChanges: { _action: "delete" }
       (mockDb.delete as jest.Mock).mockReturnValue(mockDeleteChain());
       (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
 
@@ -178,11 +385,25 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.message).toBe("Pengajuan penghapusan disetujui, data telah dihapus");
     });
 
-    it("berhasil approve data penangkaran", async () => {
+    it("200 - approve penghapusan dengan createdBy null", async () => {
+      // Menutup branch diajukanOleh = null pada insertVerifikasiLog
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue(
-        mockSelectChain([{ ...mockPenangkaranPending, statusVerifikasi: "pending" }])
-      );
+      setupActionMock({ ...mockReferensiPendingHapus, createdBy: null });
+      (mockDb.delete as jest.Mock).mockReturnValue(mockDeleteChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/approve")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Pengajuan penghapusan disetujui, data telah dihapus");
+    });
+
+    it("200 - approve data penangkaran", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock(mockPenangkaranPending);
       (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
       (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
 
@@ -195,7 +416,7 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.message).toBe("Data berhasil disetujui");
     });
 
-    it("gagal jika tabelTarget dan targetId tidak diisi", async () => {
+    it("400 - tabelTarget dan targetId tidak diisi", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
 
       const res = await request(app)
@@ -207,7 +428,19 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.message).toBe("tabelTarget dan targetId wajib diisi");
     });
 
-    it("gagal jika tabelTarget tidak valid", async () => {
+    it("400 - hanya tabelTarget yang tidak diisi", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+
+      const res = await request(app)
+        .post("/api/verifikasi/approve")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ targetId: 1 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("tabelTarget dan targetId wajib diisi");
+    });
+
+    it("400 - tabelTarget tidak valid", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
 
       const res = await request(app)
@@ -219,9 +452,9 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.message).toBe("tabelTarget tidak valid");
     });
 
-    it("gagal jika data tidak ditemukan", async () => {
+    it("404 - data tidak ditemukan", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue(mockSelectChain([]));
+      setupActionMock(null);
 
       const res = await request(app)
         .post("/api/verifikasi/approve")
@@ -232,11 +465,9 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.message).toBe("Data tidak ditemukan");
     });
 
-    it("gagal jika data tidak dalam status pending", async () => {
+    it("400 - data tidak dalam status pending", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue(
-        mockSelectChain([{ ...mockReferensiPending, statusVerifikasi: "disetujui" }])
-      );
+      setupActionMock({ ...mockReferensiPending, statusVerifikasi: "disetujui" });
 
       const res = await request(app)
         .post("/api/verifikasi/approve")
@@ -247,7 +478,20 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.message).toContain("tidak dalam status pending");
     });
 
-    it("gagal jika bukan admin pusat", async () => {
+    it("500 - error server saat approve gagal", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
+
+      const res = await request(app)
+        .post("/api/verifikasi/approve")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1 });
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal menyetujui data");
+    });
+
+    it("403 - bukan admin_pusat", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
 
       const res = await request(app)
@@ -260,49 +504,109 @@ describe("Verifikasi Endpoints", () => {
   });
 
   // =============================================
-  // TOLAK DATA
+  // POST /api/verifikasi/tolak
   // =============================================
 
   describe("POST /api/verifikasi/tolak", () => {
-    it("berhasil tolak data dengan catatan", async () => {
+
+    it("200 - tolak data (pendingChanges null → jenisPengajuan tambah)", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue(
-        mockSelectChain([{ ...mockReferensiPending, statusVerifikasi: "pending" }])
-      );
+      setupActionMock(mockReferensiPending); // pendingChanges null
       (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
       (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
 
       const res = await request(app)
         .post("/api/verifikasi/tolak")
         .set("Authorization", "Bearer mocked_token")
-        .send({
-          tabelTarget: "referensi_tsl",
-          targetId: 1,
-          catatan: "Data tidak lengkap",
-        });
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "Data tidak lengkap" });
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe("Data berhasil ditolak");
       expect(res.body.catatan).toBe("Data tidak lengkap");
     });
 
-    it("gagal tolak jika catatan kosong", async () => {
+    it("200 - tolak perubahan data (pendingChanges ada key → jenisPengajuan perbarui)", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock(mockReferensiPendingPerbarui);
+      (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/tolak")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "Nama tidak sesuai referensi" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Data berhasil ditolak");
+    });
+
+    it("200 - tolak pengajuan penghapusan (pendingChanges._action = delete)", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock(mockReferensiPendingHapus);
+      (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/tolak")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "Data masih digunakan" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Data berhasil ditolak");
+    });
+
+    it("200 - tolak dengan createdBy null", async () => {
+      // Menutup branch diajukanOleh = null pada insertVerifikasiLog
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock({ ...mockReferensiPending, createdBy: null });
+      (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/tolak")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "Data tidak valid" });
+
+      expect(res.status).toBe(200);
+    });
+
+    it("400 - catatan kosong string", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
 
       const res = await request(app)
         .post("/api/verifikasi/tolak")
         .set("Authorization", "Bearer mocked_token")
-        .send({
-          tabelTarget: "referensi_tsl",
-          targetId: 1,
-          catatan: "",
-        });
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "" });
 
       expect(res.status).toBe(400);
       expect(res.body.message).toBe("Catatan wajib diisi saat menolak data");
     });
 
-    it("gagal tolak jika tabelTarget dan targetId tidak diisi", async () => {
+    it("400 - catatan hanya spasi (trim kosong)", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+
+      const res = await request(app)
+        .post("/api/verifikasi/tolak")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "   " });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Catatan wajib diisi saat menolak data");
+    });
+
+    it("400 - catatan tidak dikirim sama sekali", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+
+      const res = await request(app)
+        .post("/api/verifikasi/tolak")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Catatan wajib diisi saat menolak data");
+    });
+
+    it("400 - tabelTarget dan targetId tidak diisi", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
 
       const res = await request(app)
@@ -314,80 +618,78 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.message).toBe("tabelTarget dan targetId wajib diisi");
     });
 
-    it("gagal tolak jika data tidak ditemukan", async () => {
+    it("404 - data tidak ditemukan", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue(mockSelectChain([]));
+      setupActionMock(null);
 
       const res = await request(app)
         .post("/api/verifikasi/tolak")
         .set("Authorization", "Bearer mocked_token")
-        .send({
-          tabelTarget: "penangkaran",
-          targetId: 999,
-          catatan: "Data tidak valid",
-        });
+        .send({ tabelTarget: "penangkaran", targetId: 999, catatan: "Data tidak valid" });
 
       expect(res.status).toBe(404);
       expect(res.body.message).toBe("Data tidak ditemukan");
     });
 
-    it("gagal tolak jika data tidak dalam status pending", async () => {
+    it("400 - data tidak dalam status pending", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue(
-        mockSelectChain([{ ...mockReferensiPending, statusVerifikasi: "disetujui" }])
-      );
+      setupActionMock({ ...mockReferensiPending, statusVerifikasi: "disetujui" });
 
       const res = await request(app)
         .post("/api/verifikasi/tolak")
         .set("Authorization", "Bearer mocked_token")
-        .send({
-          tabelTarget: "referensi_tsl",
-          targetId: 1,
-          catatan: "Data tidak valid",
-        });
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "Data tidak valid" });
 
       expect(res.status).toBe(400);
       expect(res.body.message).toContain("tidak dalam status pending");
     });
 
-    it("gagal jika bukan admin pusat", async () => {
+    it("500 - error server saat tolak gagal", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
+
+      const res = await request(app)
+        .post("/api/verifikasi/tolak")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "Data tidak valid" });
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal menolak data");
+    });
+
+    it("403 - bukan admin_pusat", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
 
       const res = await request(app)
         .post("/api/verifikasi/tolak")
         .set("Authorization", "Bearer mocked_token")
-        .send({
-          tabelTarget: "referensi_tsl",
-          targetId: 1,
-          catatan: "Data tidak valid",
-        });
+        .send({ tabelTarget: "referensi_tsl", targetId: 1, catatan: "Data tidak valid" });
 
       expect(res.status).toBe(403);
     });
   });
 
   // =============================================
-  // GET VERIFIKASI LOG
+  // GET /api/verifikasi/log
   // =============================================
 
   describe("GET /api/verifikasi/log", () => {
-    it("berhasil ambil log verifikasi sebagai admin", async () => {
+
+    it("200 - berhasil ambil log verifikasi", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
-      (mockDb.select as jest.Mock).mockReturnValue({
-        from: jest.fn().mockReturnValue({
-          orderBy: jest.fn().mockResolvedValue([
-            {
-              id: 1,
-              tabelTarget: "referensi_tsl",
-              targetId: 1,
-              status: "disetujui",
-              catatan: null,
-              verifikasiOleh: 1,
-              createdAt: new Date(),
-            },
-          ]),
-        }),
-      });
+      (mockDb.select as jest.Mock).mockReturnValue(mockSelectOrderByChain([
+        {
+          id: 1,
+          tabelTarget: "referensi_tsl",
+          targetId: 1,
+          jenisPengajuan: "perbarui",
+          status: "disetujui",
+          catatan: null,
+          createdBy: 2,
+          verifikasiOleh: 1,
+          createdAt: new Date(),
+        },
+      ]));
 
       const res = await request(app)
         .get("/api/verifikasi/log")
@@ -397,12 +699,36 @@ describe("Verifikasi Endpoints", () => {
       expect(res.body.data).toHaveLength(1);
     });
 
-    it("gagal tanpa token", async () => {
+    it("200 - log kosong", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.select as jest.Mock).mockReturnValue(mockSelectOrderByChain([]));
+
+      const res = await request(app)
+        .get("/api/verifikasi/log")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(0);
+    });
+
+    it("500 - error server saat query log gagal", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
+
+      const res = await request(app)
+        .get("/api/verifikasi/log")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal mengambil log verifikasi");
+    });
+
+    it("401 - tanpa token", async () => {
       const res = await request(app).get("/api/verifikasi/log");
       expect(res.status).toBe(401);
     });
 
-    it("gagal jika bukan admin pusat", async () => {
+    it("403 - bukan admin_pusat", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
 
       const res = await request(app)

@@ -119,6 +119,52 @@ describe("Referensi TSL Controller", () => {
       expect(res.body.data).toHaveLength(0);
     });
 
+    it("200 - filter dengan ?statusVerifikasi=pending", async () => {
+      setUser(mockAdmin);
+      mockSelect([{ ...mockReferensi, statusVerifikasi: "pending" }]);
+
+      const res = await request(app)
+        .get("/api/referensi-tsl?statusVerifikasi=pending")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+    });
+
+    it("200 - filter dengan ?statusVerifikasi=disetujui", async () => {
+      setUser(mockAdmin);
+      mockSelect([mockReferensi]);
+
+      const res = await request(app)
+        .get("/api/referensi-tsl?statusVerifikasi=disetujui")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(200);
+    });
+
+    it("200 - filter dengan ?statusVerifikasi=ditolak", async () => {
+      setUser(mockAdmin);
+      mockSelect([]);
+
+      const res = await request(app)
+        .get("/api/referensi-tsl?statusVerifikasi=ditolak")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(0);
+    });
+
+    it("400 - ?statusVerifikasi tidak valid", async () => {
+      setUser(mockAdmin);
+
+      const res = await request(app)
+        .get("/api/referensi-tsl?statusVerifikasi=tidak_valid")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak");
+    });
+
     it("500 - error server", async () => {
       setUser(mockAdmin);
       (db.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
@@ -352,6 +398,21 @@ describe("Referensi TSL Controller", () => {
       expect(res.body.message).toBe("Jenis TSL tidak valid");
     });
 
+    it("200 - bidang_wilayah update tanpa field jenis → jenis tidak divalidasi, tetap pending", async () => {
+      // Menutup branch fields.jenis falsy pada kondisi: if (fields.jenis && !VALID_JENIS.includes(fields.jenis))
+      setUser(mockBidang);
+      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "disetujui" }]);
+      mockUpdate([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ kingdom: "Plantae" }); // tidak ada field jenis
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Perubahan telah diajukan, menunggu persetujuan admin");
+    });
+
     it("400 - admin_pusat update dengan jenis tidak valid", async () => {
       setUser(mockAdmin);
       mockSelect([mockReferensi]);
@@ -363,6 +424,21 @@ describe("Referensi TSL Controller", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.message).toBe("Jenis TSL tidak valid");
+    });
+
+    it("200 - admin_pusat update tanpa field jenis → jenis tidak divalidasi", async () => {
+      // Menutup branch fields.jenis falsy pada kondisi: if (fields.jenis && !VALID_JENIS.includes(fields.jenis))
+      setUser(mockAdmin);
+      mockSelect([mockReferensi]);
+      mockUpdate([{ ...mockReferensi, kingdom: "Plantae" }]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ kingdom: "Plantae" }); // tidak ada field jenis
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Referensi TSL berhasil diperbarui");
     });
 
     it("404 - data tidak ditemukan saat update", async () => {
