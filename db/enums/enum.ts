@@ -20,6 +20,29 @@ export const statusVerifikasiEnum = pgEnum("status_verifikasi", [
   "ditolak",   // Ditolak Admin Pusat (ada catatan)
 ]);
 
+export const statusCitesEnum = pgEnum("status_cites", [
+  "apendiks_i",
+  "apendiks_ii",
+  "apendiks_iii",
+]);
+
+export const statusIucnEnum = pgEnum("status_iucn", [
+  "tidak_dievaluasi",
+  "data_tidak_cukup",
+  "risiko_rendah",
+  "hampir_terancam",
+  "rentan",
+  "terancam_punah",
+  "sangat_terancam_punah",
+  "punah_di_alam",
+  "punah",
+]);
+
+export const statusPerlindunganNasionalEnum = pgEnum("status_perlindungan_nasional", [
+  "tidak_dilindungi",
+  "dilindungi",
+]);
+
 // Tipe tabel target untuk log verifikasi
 export const tabelTargetEnum = pgEnum("tabel_target", [
   "penangkaran",
@@ -33,4 +56,10 @@ export const tabelTargetEnum = pgEnum("tabel_target", [
 export const tipeWilayahEnum = pgEnum("tipe_wilayah", [
   "bidang", // Bidang Wilayah I, II, III
   "seksi",  // Seksi Wilayah I, II, III, IV, V, VI
+]);
+//verifikasi log
+export const jenisPengajuanEnum = pgEnum("jenis_pengajuan", [
+  "tambah",
+  "perbarui",
+  "hapus",
 ]);
