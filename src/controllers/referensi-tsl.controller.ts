@@ -76,8 +76,6 @@ const SELECT_FIELDS = {
   statusIucn: referensiTsl.statusIucn,
   statusVerifikasi: referensiTsl.statusVerifikasi,
   catatanVerifikasi: referensiTsl.catatanVerifikasi,
-  // Diperlukan oleh frontend non-admin untuk mendeteksi jenis pengajuan
-  // (Tambah / Perbarui / Hapus) tanpa akses ke /api/verifikasi/*
   pendingChanges: referensiTsl.pendingChanges,
   createdBy: referensiTsl.createdBy,
   namaInputor: users.nama,
