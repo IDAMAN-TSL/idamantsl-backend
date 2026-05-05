@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, json } from "drizzle-orm/pg-core";
 import { statusVerifikasiEnum } from "../enums/enum";
 import { wilayah } from "./wilayah";
 import { referensiTsl } from "./referensi-tsl";
@@ -43,7 +43,7 @@ export const penangkaran = pgTable("penangkaran", {
   // Siapa yang menginput (Bidang Wilayah atau Admin Pusat)
   createdBy: integer("created_by").references(() => users.id),
   updatedBy: integer("updated_by").references(() => users.id),
-
+  pendingChanges: json("pending_changes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

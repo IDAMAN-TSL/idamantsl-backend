@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
-import { eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import {
   verifikasiLog,
   referensiTsl,
   penangkaran,
+  users,
 } from "../../db/schema";
 
 interface AuthUser {
@@ -29,12 +30,9 @@ type TableDef = {
   find: (id: number) => Promise<Record<string, unknown> | null>;
   update: (id: number, data: Record<string, unknown>) => Promise<void>;
   delete: (id: number) => Promise<void>;
-  findAll: () => Promise<Record<string, unknown>[]>;
 };
 
-// =============================================
-// TABLE REGISTRY
-// =============================================
+// ─── Table Registry ───────────────────────────────────────────────────────────
 
 const TABLE_REGISTRY: Partial<Record<TabelTarget, TableDef>> = {
   referensi_tsl: {
@@ -44,8 +42,6 @@ const TABLE_REGISTRY: Partial<Record<TabelTarget, TableDef>> = {
       void (await db.update(referensiTsl).set(data).where(eq(referensiTsl.id, id))),
     delete: async (id) =>
       void (await db.delete(referensiTsl).where(eq(referensiTsl.id, id))),
-    findAll: async () =>
-      await db.select().from(referensiTsl).where(eq(referensiTsl.statusVerifikasi, "disetujui")),
   },
   penangkaran: {
     find: async (id) =>
@@ -54,8 +50,6 @@ const TABLE_REGISTRY: Partial<Record<TabelTarget, TableDef>> = {
       void (await db.update(penangkaran).set(data).where(eq(penangkaran.id, id))),
     delete: async (id) =>
       void (await db.delete(penangkaran).where(eq(penangkaran.id, id))),
-    findAll: async () =>
-      await db.select().from(penangkaran).where(eq(penangkaran.statusVerifikasi, "disetujui")),
   },
 };
 
@@ -67,63 +61,55 @@ function getTableDef(tabel: TabelTarget): TableDef {
   return def;
 }
 
-// =============================================
-// HELPER: Tentukan jenis pengajuan
-// =============================================
+// ─── Helper: Tentukan jenis pengajuan ────────────────────────────────────────
 
 function getJenisPengajuan(
-  pendingChanges: Record<string, unknown> | null,
-  isNewRecord: boolean
+  pendingChanges: Record<string, unknown> | null
 ): JenisPengajuan {
   if (pendingChanges?._action === "delete") return "hapus";
-  if (isNewRecord) return "tambah";
-  return "perbarui";
+  if (pendingChanges && Object.keys(pendingChanges).length > 0) return "perbarui";
+  // pendingChanges null = data baru yang belum disetujui (tambah)
+  return "tambah";
 }
 
-// =============================================
-// HELPER: Insert log verifikasi
-// =============================================
+// ─── Helper: Insert log verifikasi ───────────────────────────────────────────
 
 async function insertVerifikasiLog(
   tabelTarget: TabelTarget,
   targetId: number,
   status: "disetujui" | "ditolak" | "pending",
   jenisPengajuan: JenisPengajuan,
-  diajukanOleh: number,
+  createdBy: number | null,
   verifikasiOleh: number,
-  catatan?: string | null,
+  catatan?: string | null
 ) {
   await db.insert(verifikasiLog).values({
     tabelTarget,
     targetId,
     status,
     jenisPengajuan,
-    diajukanOleh,
+    createdBy,
     verifikasiOleh,
     catatan: catatan ?? null,
   });
 }
 
-// =============================================
-// HELPER: Validasi field dasar
-// =============================================
+// ─── Helper: Validasi field dasar ────────────────────────────────────────────
 
 function validateBaseFields(
   tabelTarget: unknown,
-  targetId: unknown,
+  targetId: unknown
 ): string | null {
   if (!tabelTarget || !targetId) return "tabelTarget dan targetId wajib diisi";
   if (!VALID_TABEL.includes(tabelTarget as TabelTarget)) return "tabelTarget tidak valid";
   return null;
 }
 
-// =============================================
-// HELPER: Cari record dengan status pending
-// =============================================
+// ─── Helper: Cari record dengan status pending ────────────────────────────────
 
 async function findPendingRecord(
   tabel: TabelTarget,
-  targetId: number,
+  targetId: number
 ): Promise<{ record: Record<string, unknown> } | { error: string; status: number }> {
   const record = await getTableDef(tabel).find(targetId);
   if (!record) return { error: "Data tidak ditemukan", status: 404 };
@@ -136,118 +122,116 @@ async function findPendingRecord(
   return { record };
 }
 
-// =============================================
-// GET /api/verifikasi/pending
-// Semua data pending dari semua tabel
-// =============================================
+// ─── Helper: Ambil nama inputor dari users ────────────────────────────────────
+
+async function getNamaInputor(createdBy: number | null): Promise<string | null> {
+  if (!createdBy) return null;
+  const result = await db
+    .select({ nama: users.nama })
+    .from(users)
+    .where(eq(users.id, createdBy))
+    .limit(1);
+  return result[0]?.nama ?? null;
+}
+
+// ─── GET /api/verifikasi/pending ──────────────────────────────────────────────
 
 export async function getDataPending(_req: AuthRequest, res: Response): Promise<void> {
   try {
     const [referensiPending, penangkaranPending] = await Promise.all([
-      db
-        .select({
-          id: referensiTsl.id,
-          namaDaerah: referensiTsl.namaDaerah,
-          jenis: referensiTsl.jenis,
-          statusVerifikasi: referensiTsl.statusVerifikasi,
-          pendingChanges: referensiTsl.pendingChanges,
-          createdBy: referensiTsl.createdBy,
-          updatedAt: referensiTsl.updatedAt,
-        })
-        .from(referensiTsl)
-        .where(eq(referensiTsl.statusVerifikasi, "pending")),
+      db.select({
+        id: referensiTsl.id,
+        namaDaerah: referensiTsl.namaDaerah,
+        jenis: referensiTsl.jenis,
+        statusVerifikasi: referensiTsl.statusVerifikasi,
+        pendingChanges: referensiTsl.pendingChanges,
+        createdBy: referensiTsl.createdBy,
+        updatedAt: referensiTsl.updatedAt,
+      }).from(referensiTsl).where(eq(referensiTsl.statusVerifikasi, "pending")),
 
-      db
-        .select({
-          id: penangkaran.id,
-          namaPenangkaran: penangkaran.namaPenangkaran,
-          statusVerifikasi: penangkaran.statusVerifikasi,
-          createdBy: penangkaran.createdBy,
-          updatedAt: penangkaran.updatedAt,
-        })
-        .from(penangkaran)
-        .where(eq(penangkaran.statusVerifikasi, "pending")),
+      db.select({
+        id: penangkaran.id,
+        namaPenangkaran: penangkaran.namaPenangkaran,
+        statusVerifikasi: penangkaran.statusVerifikasi,
+        pendingChanges: penangkaran.pendingChanges,
+        createdBy: penangkaran.createdBy,
+        updatedAt: penangkaran.updatedAt,
+      }).from(penangkaran).where(eq(penangkaran.statusVerifikasi, "pending")),
     ]);
 
-    // Tentukan jenis pengajuan untuk setiap record
-    const referensiMapped = referensiPending.map((r) => ({
-      ...r,
-      tabelTarget: "referensi_tsl",
-      jenisPengajuan: getJenisPengajuan(
-        r.pendingChanges as Record<string, unknown> | null,
-        false
-      ),
-    }));
+    // Ambil semua user sekaligus untuk mapping nama inputor
+    const allUsers = await db.select({ id: users.id, nama: users.nama }).from(users);
+    const userMap: Record<number, string> = {};
+    allUsers.forEach(u => { userMap[u.id] = u.nama; });
 
-    const penangkaranMapped = penangkaranPending.map((p) => ({
-      ...p,
-      tabelTarget: "penangkaran",
-      jenisPengajuan: getJenisPengajuan(null, false),
-    }));
+    const referensiMapped = referensiPending.map((r) => {
+      const pendingChanges = r.pendingChanges as Record<string, unknown> | null;
+      return {
+        ...r,
+        tabelTarget: "referensi_tsl",
+        jenisPengajuan: getJenisPengajuan(pendingChanges),
+        namaInputor: r.createdBy ? (userMap[r.createdBy] ?? null) : null,
+      };
+    });
+
+    const penangkaranMapped = penangkaranPending.map((p) => {
+      const pendingChanges = p.pendingChanges as Record<string, unknown> | null;
+      return {
+        ...p,
+        tabelTarget: "penangkaran",
+        jenisPengajuan: getJenisPengajuan(pendingChanges),
+        namaInputor: p.createdBy ? (userMap[p.createdBy] ?? null) : null,
+      };
+    });
 
     res.status(200).json({
       data: {
         referensi_tsl: referensiMapped,
         penangkaran: penangkaranMapped,
       },
-      total:
-        referensiMapped.length + penangkaranMapped.length,
+      total: referensiMapped.length + penangkaranMapped.length,
     });
   } catch (error) {
-    console.error("[ERROR] getDataPending:", error);
     res.status(500).json({ message: "Gagal mengambil data pending" });
   }
 }
 
-// =============================================
-// GET /api/verifikasi/approved
-// Semua data yang sudah disetujui dari semua tabel
-// =============================================
+// ─── GET /api/verifikasi/approved ─────────────────────────────────────────────
 
 export async function getDataApproved(_req: AuthRequest, res: Response): Promise<void> {
   try {
     const [referensiApproved, penangkaranApproved] = await Promise.all([
-      db
-        .select({
-          id: referensiTsl.id,
-          namaDaerah: referensiTsl.namaDaerah,
-          jenis: referensiTsl.jenis,
-          statusVerifikasi: referensiTsl.statusVerifikasi,
-          createdBy: referensiTsl.createdBy,
-          updatedAt: referensiTsl.updatedAt,
-        })
-        .from(referensiTsl)
-        .where(eq(referensiTsl.statusVerifikasi, "disetujui")),
+      db.select({
+        id: referensiTsl.id,
+        namaDaerah: referensiTsl.namaDaerah,
+        jenis: referensiTsl.jenis,
+        statusVerifikasi: referensiTsl.statusVerifikasi,
+        createdBy: referensiTsl.createdBy,
+        updatedAt: referensiTsl.updatedAt,
+      }).from(referensiTsl).where(eq(referensiTsl.statusVerifikasi, "disetujui")),
 
-      db
-        .select({
-          id: penangkaran.id,
-          namaPenangkaran: penangkaran.namaPenangkaran,
-          statusVerifikasi: penangkaran.statusVerifikasi,
-          createdBy: penangkaran.createdBy,
-          updatedAt: penangkaran.updatedAt,
-        })
-        .from(penangkaran)
-        .where(eq(penangkaran.statusVerifikasi, "disetujui")),
+      db.select({
+        id: penangkaran.id,
+        namaPenangkaran: penangkaran.namaPenangkaran,
+        statusVerifikasi: penangkaran.statusVerifikasi,
+        createdBy: penangkaran.createdBy,
+        updatedAt: penangkaran.updatedAt,
+      }).from(penangkaran).where(eq(penangkaran.statusVerifikasi, "disetujui")),
     ]);
 
     res.status(200).json({
       data: {
-        referensi_tsl: referensiApproved.map((r) => ({ ...r, tabelTarget: "referensi_tsl" })),
-        penangkaran: penangkaranApproved.map((p) => ({ ...p, tabelTarget: "penangkaran" })),
+        referensi_tsl: referensiApproved.map(r => ({ ...r, tabelTarget: "referensi_tsl" })),
+        penangkaran: penangkaranApproved.map(p => ({ ...p, tabelTarget: "penangkaran" })),
       },
       total: referensiApproved.length + penangkaranApproved.length,
     });
   } catch (error) {
-    console.error("[ERROR] getDataApproved:", error);
     res.status(500).json({ message: "Gagal mengambil data approved" });
   }
 }
 
-// =============================================
-// POST /api/verifikasi/approve
-// Setujui data pending
-// =============================================
+// ─── POST /api/verifikasi/approve ─────────────────────────────────────────────
 
 export async function approveData(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -270,8 +254,8 @@ export async function approveData(req: AuthRequest, res: Response): Promise<void
     const tableDef = getTableDef(tabelTarget);
     const pendingChanges = record.pendingChanges as Record<string, unknown> | null;
     const isDeleteRequest = pendingChanges?._action === "delete";
-    const jenisPengajuan = getJenisPengajuan(pendingChanges, false);
-    const diajukanOleh = record.createdBy as number;
+    const jenisPengajuan = getJenisPengajuan(pendingChanges);
+    const diajukanOleh = (record.createdBy as number | null) ?? null;
 
     if (isDeleteRequest) {
       await tableDef.delete(Number(targetId));
@@ -298,15 +282,11 @@ export async function approveData(req: AuthRequest, res: Response): Promise<void
 
     res.status(200).json({ message: "Data berhasil disetujui" });
   } catch (error) {
-    console.error("[ERROR] approveData:", error);
     res.status(500).json({ message: "Gagal menyetujui data" });
   }
 }
 
-// =============================================
-// POST /api/verifikasi/tolak
-// Tolak data pending
-// =============================================
+// ─── POST /api/verifikasi/tolak ───────────────────────────────────────────────
 
 export async function tolakData(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -332,8 +312,8 @@ export async function tolakData(req: AuthRequest, res: Response): Promise<void> 
 
     const { record } = result;
     const pendingChanges = record.pendingChanges as Record<string, unknown> | null;
-    const jenisPengajuan = getJenisPengajuan(pendingChanges, false);
-    const diajukanOleh = record.createdBy as number;
+    const jenisPengajuan = getJenisPengajuan(pendingChanges);
+    const diajukanOleh = (record.createdBy as number | null) ?? null;
 
     await getTableDef(tabelTarget).update(Number(targetId), {
       statusVerifikasi: "ditolak",
@@ -349,15 +329,11 @@ export async function tolakData(req: AuthRequest, res: Response): Promise<void> 
 
     res.status(200).json({ message: "Data berhasil ditolak", catatan });
   } catch (error) {
-    console.error("[ERROR] tolakData:", error);
     res.status(500).json({ message: "Gagal menolak data" });
   }
 }
 
-// =============================================
-// GET /api/verifikasi/log
-// Riwayat semua verifikasi
-// =============================================
+// ─── GET /api/verifikasi/log ──────────────────────────────────────────────────
 
 export async function getVerifikasiLog(_req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -368,7 +344,6 @@ export async function getVerifikasiLog(_req: AuthRequest, res: Response): Promis
 
     res.status(200).json({ data: result });
   } catch (error) {
-    console.error("[ERROR] getVerifikasiLog:", error);
     res.status(500).json({ message: "Gagal mengambil log verifikasi" });
   }
 }
