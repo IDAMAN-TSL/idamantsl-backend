@@ -8,6 +8,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(), 
   nomorTelepon: text("nomor_telepon"),
+  alamatKantor: text("alamat_kantor"),
 
   // Role menentukan hak akses di sistem
   role: roleEnum("role").notNull(),

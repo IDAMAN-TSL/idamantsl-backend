@@ -25,15 +25,37 @@ async function findReferensiById(id: number) {
 
 function buildReferensiFields(body: Request["body"]) {
   const {
-    nomor, namaDaerah, jenis, kingdom, divisi, kelas, ordo,
-    famili, genus, spesies, statusPerlindunganNasional,
-    statusCites, statusIucn, catatanVerifikasi,
+    nomor,
+    namaDaerah,
+    jenis,
+    kingdom,
+    divisi,
+    kelas,
+    ordo,
+    famili,
+    genus,
+    spesies,
+    statusPerlindunganNasional,
+    statusCites,
+    statusIucn,
+    catatanVerifikasi,
   } = body;
 
   return {
-    nomor, namaDaerah, jenis, kingdom, divisi, kelas, ordo,
-    famili, genus, spesies, statusPerlindunganNasional,
-    statusCites, statusIucn, catatanVerifikasi,
+    nomor,
+    namaDaerah,
+    jenis,
+    kingdom,
+    divisi,
+    kelas,
+    ordo,
+    famili,
+    genus,
+    spesies,
+    statusPerlindunganNasional,
+    statusCites,
+    statusIucn,
+    catatanVerifikasi,
   };
 }
 
@@ -58,13 +80,19 @@ const SELECT_FIELDS = {
   statusIucn: referensiTsl.statusIucn,
   statusVerifikasi: referensiTsl.statusVerifikasi,
   catatanVerifikasi: referensiTsl.catatanVerifikasi,
+  // Diperlukan oleh frontend non-admin untuk mendeteksi jenis pengajuan
+  // (Tambah / Perbarui / Hapus) tanpa akses ke /api/verifikasi/*
+  pendingChanges: referensiTsl.pendingChanges,
   createdBy: referensiTsl.createdBy,
   namaInputor: users.nama,
   createdAt: referensiTsl.createdAt,
   updatedAt: referensiTsl.updatedAt,
 };
 
-export async function getAllReferensi(req: AuthRequest, res: Response): Promise<void> {
+export async function getAllReferensi(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const result = await db
       .select(SELECT_FIELDS)
@@ -78,7 +106,10 @@ export async function getAllReferensi(req: AuthRequest, res: Response): Promise<
   }
 }
 
-export async function getReferensiById(req: AuthRequest, res: Response): Promise<void> {
+export async function getReferensiById(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -104,7 +135,10 @@ export async function getReferensiById(req: AuthRequest, res: Response): Promise
   }
 }
 
-export async function createReferensi(req: AuthRequest, res: Response): Promise<void> {
+export async function createReferensi(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const user = req.user!;
     const fields = buildReferensiFields(req.body);
@@ -119,20 +153,26 @@ export async function createReferensi(req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const statusVerifikasi = user.role === "admin_pusat" ? "disetujui" : "pending";
+    const statusVerifikasi =
+      user.role === "admin_pusat" ? "disetujui" : "pending";
 
     const [newData] = await db
       .insert(referensiTsl)
       .values({ ...fields, statusVerifikasi, createdBy: user.id })
       .returning();
 
-    res.status(201).json({ message: "Referensi TSL berhasil ditambahkan", data: newData });
+    res
+      .status(201)
+      .json({ message: "Referensi TSL berhasil ditambahkan", data: newData });
   } catch {
     res.status(500).json({ message: "Gagal menambahkan referensi TSL" });
   }
 }
 
-export async function updateReferensi(req: AuthRequest, res: Response): Promise<void> {
+export async function updateReferensi(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -149,13 +189,20 @@ export async function updateReferensi(req: AuthRequest, res: Response): Promise<
     }
 
     if (isNotOwner(user.role, existing.createdBy, user.id)) {
-      res.status(403).json({ message: "Tidak memiliki akses untuk mengubah data ini" });
+      res
+        .status(403)
+        .json({ message: "Tidak memiliki akses untuk mengubah data ini" });
       return;
     }
 
     if (user.role === "bidang_wilayah") {
       if (existing.statusVerifikasi === "pending") {
-        res.status(403).json({ message: "Data sedang menunggu persetujuan admin, tidak bisa diubah" });
+        res
+          .status(403)
+          .json({
+            message:
+              "Data sedang menunggu persetujuan admin, tidak bisa diubah",
+          });
         return;
       }
       if (existing.statusVerifikasi === "ditolak") {
@@ -174,11 +221,20 @@ export async function updateReferensi(req: AuthRequest, res: Response): Promise<
 
       const [updated] = await db
         .update(referensiTsl)
-        .set({ pendingChanges: fields, statusVerifikasi: "pending", updatedAt: new Date() })
+        .set({
+          pendingChanges: fields,
+          statusVerifikasi: "pending",
+          updatedAt: new Date(),
+        })
         .where(eq(referensiTsl.id, id))
         .returning();
 
-      res.status(200).json({ message: "Perubahan telah diajukan, menunggu persetujuan admin", data: updated });
+      res
+        .status(200)
+        .json({
+          message: "Perubahan telah diajukan, menunggu persetujuan admin",
+          data: updated,
+        });
       return;
     }
 
@@ -201,10 +257,14 @@ export async function updateReferensi(req: AuthRequest, res: Response): Promise<
     if (fields.famili !== undefined) updateData.famili = fields.famili;
     if (fields.genus !== undefined) updateData.genus = fields.genus;
     if (fields.spesies !== undefined) updateData.spesies = fields.spesies;
-    if (fields.statusPerlindunganNasional !== undefined) updateData.statusPerlindunganNasional = fields.statusPerlindunganNasional;
-    if (fields.statusCites !== undefined) updateData.statusCites = fields.statusCites;
-    if (fields.statusIucn !== undefined) updateData.statusIucn = fields.statusIucn;
-    if (fields.catatanVerifikasi !== undefined) updateData.catatanVerifikasi = fields.catatanVerifikasi;
+    if (fields.statusPerlindunganNasional !== undefined)
+      updateData.statusPerlindunganNasional = fields.statusPerlindunganNasional;
+    if (fields.statusCites !== undefined)
+      updateData.statusCites = fields.statusCites;
+    if (fields.statusIucn !== undefined)
+      updateData.statusIucn = fields.statusIucn;
+    if (fields.catatanVerifikasi !== undefined)
+      updateData.catatanVerifikasi = fields.catatanVerifikasi;
 
     const [updated] = await db
       .update(referensiTsl)
@@ -212,13 +272,18 @@ export async function updateReferensi(req: AuthRequest, res: Response): Promise<
       .where(eq(referensiTsl.id, id))
       .returning();
 
-    res.status(200).json({ message: "Referensi TSL berhasil diperbarui", data: updated });
+    res
+      .status(200)
+      .json({ message: "Referensi TSL berhasil diperbarui", data: updated });
   } catch {
     res.status(500).json({ message: "Gagal memperbarui referensi TSL" });
   }
 }
 
-export async function deleteReferensi(req: AuthRequest, res: Response): Promise<void> {
+export async function deleteReferensi(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -236,7 +301,12 @@ export async function deleteReferensi(req: AuthRequest, res: Response): Promise<
 
     if (user.role === "bidang_wilayah") {
       if (existing.statusVerifikasi === "pending") {
-        res.status(403).json({ message: "Data sedang menunggu persetujuan admin, tidak bisa dihapus" });
+        res
+          .status(403)
+          .json({
+            message:
+              "Data sedang menunggu persetujuan admin, tidak bisa dihapus",
+          });
         return;
       }
       if (existing.statusVerifikasi === "ditolak") {
@@ -249,10 +319,19 @@ export async function deleteReferensi(req: AuthRequest, res: Response): Promise<
 
       await db
         .update(referensiTsl)
-        .set({ pendingChanges: { _action: "delete" }, statusVerifikasi: "pending", updatedAt: new Date() })
+        .set({
+          pendingChanges: { _action: "delete" },
+          statusVerifikasi: "pending",
+          updatedAt: new Date(),
+        })
         .where(eq(referensiTsl.id, id));
 
-      res.status(200).json({ message: "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin" });
+      res
+        .status(200)
+        .json({
+          message:
+            "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin",
+        });
       return;
     }
 

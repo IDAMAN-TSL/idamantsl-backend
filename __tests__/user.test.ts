@@ -41,6 +41,13 @@ const mockUser = {
   updatedAt: new Date().toISOString(),
 };
 
+const mockWilayahBidang = {
+  id: 1,
+  namaWilayah: "Bogor",
+  tipeWilayah: "bidang",
+  nomorWilayah: 1,
+};
+
 function mockJwtVerify() {
   (jwt.verify as jest.Mock).mockReturnValue(mockAdmin);
 }
@@ -83,12 +90,36 @@ function mockDelete() {
   (db.delete as jest.Mock).mockReturnValue(chain);
   return chain;
 }
+
+/**
+ * Membuat mock select chain yang mendukung multiple pemanggilan berurutan.
+ * createUser memanggil db.select dua kali:
+ *   1. Cek wilayah (jika wilayahId ada)
+ *   2. Cek email duplikat
+ * Gunakan helper ini agar setiap panggilan .limit() mengembalikan nilai berbeda.
+ */
+function mockSelectSequential(responses: unknown[]) {
+  let callIndex = 0;
+  (db.select as jest.Mock).mockImplementation(() => {
+    const response = responses[callIndex] ?? [];
+    callIndex++;
+    return {
+      from: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockResolvedValue(response),
+      limit: jest.fn().mockResolvedValue(response),
+    };
+  });
+}
+
 describe("User Controller", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockJwtVerify();
   });
+
   describe("GET /api/users", () => {
     it("200 - berhasil mengambil list semua user", async () => {
       mockSelect([mockUser]);
@@ -125,6 +156,7 @@ describe("User Controller", () => {
       expect(res.status).toBe(500);
     });
   });
+
   describe("GET /api/users/:id", () => {
     it("200 - berhasil mengambil detail user", async () => {
       mockSelect([mockUser]);
@@ -156,6 +188,7 @@ describe("User Controller", () => {
       expect(res.body.message).toBe("ID tidak valid");
     });
   });
+
   describe("POST /api/users", () => {
     const validPayload = {
       nama: "Citra Dewi",
@@ -166,13 +199,13 @@ describe("User Controller", () => {
     };
 
     it("201 - berhasil membuat user baru", async () => {
-      // Cek email duplikat → kosong
-      const selectChain = {
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([]),
-      };
-      (db.select as jest.Mock).mockReturnValue(selectChain);
+      // createUser memanggil db.select 2x:
+      //   [0] cek wilayah → ada (tipeWilayah: "bidang")
+      //   [1] cek email   → kosong (belum terdaftar)
+      mockSelectSequential([
+        [mockWilayahBidang],
+        [],
+      ]);
       (bcrypt.hash as jest.Mock).mockResolvedValue("hashed_pass");
       mockInsert([{ id: 3, ...validPayload, createdAt: new Date().toISOString() }]);
 
@@ -214,13 +247,63 @@ describe("User Controller", () => {
       expect(res.body.message).toBe("wilayahId wajib diisi untuk role ini");
     });
 
+    it("400 - wilayahId bukan angka", async () => {
+      const res = await request(app)
+        .post("/api/users")
+        .set("Authorization", mockAdminToken)
+        .send({ ...validPayload, wilayahId: "abc" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("wilayahId harus berupa angka");
+    });
+
+    it("400 - wilayahId tidak ditemukan di database", async () => {
+      // cek wilayah → tidak ditemukan
+      mockSelectSequential([[]])
+
+      const res = await request(app)
+        .post("/api/users")
+        .set("Authorization", mockAdminToken)
+        .send(validPayload);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("wilayahId tidak ditemukan");
+    });
+
+    it("400 - role bidang_wilayah tapi wilayah bertipe seksi", async () => {
+      // cek wilayah → ada tapi tipe seksi, bukan bidang
+      mockSelectSequential([[{ ...mockWilayahBidang, tipeWilayah: "seksi" }]]);
+
+      const res = await request(app)
+        .post("/api/users")
+        .set("Authorization", mockAdminToken)
+        .send(validPayload); // role: "bidang_wilayah"
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("bidang_wilayah hanya boleh memilih wilayah bertipe bidang (ID 1-3)");
+    });
+
+    it("400 - role seksi_wilayah tapi wilayah bertipe bidang", async () => {
+      // cek wilayah → ada tapi tipe bidang, bukan seksi
+      mockSelectSequential([[{ ...mockWilayahBidang, tipeWilayah: "bidang" }]]);
+
+      const res = await request(app)
+        .post("/api/users")
+        .set("Authorization", mockAdminToken)
+        .send({ ...validPayload, role: "seksi_wilayah" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("seksi_wilayah hanya boleh memilih wilayah bertipe seksi (ID 4-9)");
+    });
+
     it("409 - email sudah terdaftar", async () => {
-      const selectChain = {
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([{ id: 5 }]),
-      };
-      (db.select as jest.Mock).mockReturnValue(selectChain);
+      // createUser memanggil db.select 2x:
+      //   [0] cek wilayah → ada
+      //   [1] cek email   → sudah ada (duplikat)
+      mockSelectSequential([
+        [mockWilayahBidang],
+        [{ id: 5 }],
+      ]);
 
       const res = await request(app)
         .post("/api/users")
@@ -232,12 +315,13 @@ describe("User Controller", () => {
     });
 
     it("500 - error server saat insert gagal", async () => {
-      const selectChain = {
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([]),
-      };
-      (db.select as jest.Mock).mockReturnValue(selectChain);
+      // createUser memanggil db.select 2x:
+      //   [0] cek wilayah → ada
+      //   [1] cek email   → kosong
+      mockSelectSequential([
+        [mockWilayahBidang],
+        [],
+      ]);
       (bcrypt.hash as jest.Mock).mockResolvedValue("hashed");
       (db.insert as jest.Mock).mockImplementation(() => {
         throw new Error("DB error");
@@ -251,15 +335,15 @@ describe("User Controller", () => {
       expect(res.status).toBe(500);
     });
   });
+
   describe("PUT /api/users/:id", () => {
     it("200 - berhasil update user", async () => {
-      // findUserById → ada
       const selectChain = {
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn()
-          .mockResolvedValueOnce([mockUser])   // findUserById
-          .mockResolvedValueOnce([]),           // cek email duplikat
+          .mockResolvedValueOnce([mockUser])
+          .mockResolvedValueOnce([]),
       };
       (db.select as jest.Mock).mockReturnValue(selectChain);
       mockUpdate([{ ...mockUser, nama: "Budi Update" }]);
@@ -311,8 +395,8 @@ describe("User Controller", () => {
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn()
-          .mockResolvedValueOnce([mockUser])   // findUserById
-          .mockResolvedValueOnce([{ id: 99 }]),// email duplikat
+          .mockResolvedValueOnce([mockUser])
+          .mockResolvedValueOnce([{ id: 99 }]),
       };
       (db.select as jest.Mock).mockReturnValue(selectChain);
 
@@ -332,7 +416,87 @@ describe("User Controller", () => {
 
       expect(res.status).toBe(400);
     });
+
+    it("400 - wilayahId bukan angka saat update", async () => {
+      mockSelectSequential([[mockUser]]);
+
+      const res = await request(app)
+        .put("/api/users/2")
+        .set("Authorization", mockAdminToken)
+        .send({ wilayahId: "bukan-angka" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("wilayahId harus berupa angka");
+    });
+
+    it("400 - wilayahId tidak ditemukan saat update", async () => {
+      // [0] findUserById → ada, [1] cek wilayah → kosong
+      mockSelectSequential([[mockUser], []]);
+
+      const res = await request(app)
+        .put("/api/users/2")
+        .set("Authorization", mockAdminToken)
+        .send({ wilayahId: 99 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("wilayahId tidak ditemukan");
+    });
+
+    it("400 - role bidang_wilayah tapi wilayah bertipe seksi saat update", async () => {
+      // [0] findUserById → ada, [1] cek wilayah → tipe seksi
+      mockSelectSequential([
+        [mockUser],
+        [{ ...mockWilayahBidang, tipeWilayah: "seksi" }],
+      ]);
+
+      const res = await request(app)
+        .put("/api/users/2")
+        .set("Authorization", mockAdminToken)
+        .send({ wilayahId: 1, role: "bidang_wilayah" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("bidang_wilayah hanya boleh memilih wilayah bertipe bidang (ID 1-3)");
+    });
+
+    it("400 - role seksi_wilayah tapi wilayah bertipe bidang saat update", async () => {
+      // [0] findUserById → ada, [1] cek wilayah → tipe bidang
+      mockSelectSequential([
+        [{ ...mockUser, role: "seksi_wilayah" }],
+        [{ ...mockWilayahBidang, tipeWilayah: "bidang" }],
+      ]);
+
+      const res = await request(app)
+        .put("/api/users/2")
+        .set("Authorization", mockAdminToken)
+        .send({ wilayahId: 1, role: "seksi_wilayah" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("seksi_wilayah hanya boleh memilih wilayah bertipe seksi (ID 4-9)");
+    });
+
+    it("500 - error server saat update gagal", async () => {
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn()
+          .mockResolvedValueOnce([mockUser])
+          .mockResolvedValueOnce([]),
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+      (db.update as jest.Mock).mockImplementation(() => {
+        throw new Error("DB error");
+      });
+
+      const res = await request(app)
+        .put("/api/users/2")
+        .set("Authorization", mockAdminToken)
+        .send({ nama: "Error Test", email: "error@test.id" });
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal memperbarui user");
+    });
   });
+
   describe("DELETE /api/users/:id", () => {
     it("200 - berhasil hapus user", async () => {
       const selectChain = {
@@ -341,6 +505,7 @@ describe("User Controller", () => {
         limit: jest.fn().mockResolvedValue([mockUser]),
       };
       (db.select as jest.Mock).mockReturnValue(selectChain);
+      mockUpdate();
       mockDelete();
 
       const res = await request(app)
@@ -352,7 +517,6 @@ describe("User Controller", () => {
     });
 
     it("400 - tidak bisa hapus akun sendiri", async () => {
-      // Admin ID = 1, coba hapus ID 1
       const res = await request(app)
         .delete("/api/users/1")
         .set("Authorization", mockAdminToken);
@@ -383,7 +547,27 @@ describe("User Controller", () => {
 
       expect(res.status).toBe(400);
     });
+
+    it("500 - error server saat hapus gagal", async () => {
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([mockUser]),
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+      (db.update as jest.Mock).mockImplementation(() => {
+        throw new Error("DB error");
+      });
+
+      const res = await request(app)
+        .delete("/api/users/2")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal menghapus user");
+    });
   });
+
   describe("PUT /api/users/:id/reset-password", () => {
     it("200 - berhasil reset password", async () => {
       const selectChain = {
@@ -446,6 +630,27 @@ describe("User Controller", () => {
         .send({ newPassword: "newpassword123" });
 
       expect(res.status).toBe(400);
+    });
+
+    it("500 - error server saat reset password gagal", async () => {
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([mockUser]),
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+      (bcrypt.hash as jest.Mock).mockResolvedValue("hashed");
+      (db.update as jest.Mock).mockImplementation(() => {
+        throw new Error("DB error");
+      });
+
+      const res = await request(app)
+        .put("/api/users/2/reset-password")
+        .set("Authorization", mockAdminToken)
+        .send({ newPassword: "newpassword123" });
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal mereset password");
     });
   });
 });
