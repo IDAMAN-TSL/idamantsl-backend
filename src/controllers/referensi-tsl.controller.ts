@@ -91,16 +91,28 @@ export async function getAllReferensi(
     const { statusVerifikasi } = req.query;
     const validStatus = ["pending", "disetujui", "ditolak"];
     if (statusVerifikasi && !validStatus.includes(statusVerifikasi as string)) {
-      res.status(400).json({ message: "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak" });
+      res
+        .status(400)
+        .json({
+          message:
+            "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak",
+        });
       return;
     }
     const query = db
       .select(SELECT_FIELDS)
       .from(referensiTsl)
       .leftJoin(users, eq(referensiTsl.createdBy, users.id));
- 
+
     const result = statusVerifikasi
-      ? await query.where(eq(referensiTsl.statusVerifikasi, statusVerifikasi as "pending" | "disetujui" | "ditolak")).orderBy(referensiTsl.createdAt)
+      ? await query
+          .where(
+            eq(
+              referensiTsl.statusVerifikasi,
+              statusVerifikasi as "pending" | "disetujui" | "ditolak",
+            ),
+          )
+          .orderBy(referensiTsl.createdAt)
       : await query.orderBy(referensiTsl.createdAt);
 
     res.status(200).json({ data: result });
@@ -151,7 +163,7 @@ export async function createReferensi(
       return;
     }
 
-    if (fields.jenis &&!VALID_JENIS.includes(fields.jenis)) {
+    if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
       res.status(400).json({ message: "Jenis TSL tidak valid" });
       return;
     }
@@ -181,7 +193,6 @@ export async function updateReferensi(
     if (isNaN(id)) {
       res.status(400).json({ message: "ID tidak valid" });
       return;
-      
     }
 
     const user = req.user!;
@@ -192,21 +203,11 @@ export async function updateReferensi(
       return;
     }
 
-    if (isNotOwner(user.role, existing.createdBy, user.id)) {
-      res
-        .status(403)
-        .json({ message: "Tidak memiliki akses untuk mengubah data ini" });
-      return;
-    }
-
     if (user.role === "bidang_wilayah") {
       if (existing.statusVerifikasi === "pending") {
-        res
-          .status(403)
-          .json({
-            message:
-              "Data sedang menunggu persetujuan admin, tidak bisa diubah",
-          });
+        res.status(403).json({
+          message: "Data sedang menunggu persetujuan admin, tidak bisa diubah",
+        });
         return;
       }
       if (existing.statusVerifikasi === "ditolak") {
@@ -222,7 +223,7 @@ export async function updateReferensi(
         res.status(400).json({ message: "Jenis TSL tidak valid" });
         return;
       }
- 
+
       const [updated] = await db
         .update(referensiTsl)
         .set({
@@ -233,7 +234,7 @@ export async function updateReferensi(
         })
         .where(eq(referensiTsl.id, id))
         .returning();
- 
+
       res.status(200).json({
         message: "Perubahan telah diajukan, menunggu persetujuan admin",
         data: updated,
@@ -312,8 +313,13 @@ export async function deleteReferensi(
           updatedAt: new Date(),
         })
         .where(eq(referensiTsl.id, id));
- 
-      res.status(200).json({ message: "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin" });
+
+      res
+        .status(200)
+        .json({
+          message:
+            "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin",
+        });
       return;
     }
 
