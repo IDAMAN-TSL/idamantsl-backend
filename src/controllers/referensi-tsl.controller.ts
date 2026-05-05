@@ -59,10 +59,6 @@ function buildReferensiFields(body: Request["body"]) {
   };
 }
 
-function isNotOwner(role: string, createdBy: number | null, userId: number) {
-  return role === "bidang_wilayah" && createdBy !== userId;
-}
-
 const SELECT_FIELDS = {
   id: referensiTsl.id,
   nomor: referensiTsl.nomor,
@@ -80,8 +76,11 @@ const SELECT_FIELDS = {
   statusIucn: referensiTsl.statusIucn,
   statusVerifikasi: referensiTsl.statusVerifikasi,
   catatanVerifikasi: referensiTsl.catatanVerifikasi,
+<<<<<<< HEAD
   // Diperlukan oleh frontend non-admin untuk mendeteksi jenis pengajuan
   // (Tambah / Perbarui / Hapus) tanpa akses ke /api/verifikasi/*
+=======
+>>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
   pendingChanges: referensiTsl.pendingChanges,
   createdBy: referensiTsl.createdBy,
   namaInputor: users.nama,
@@ -94,11 +93,20 @@ export async function getAllReferensi(
   res: Response,
 ): Promise<void> {
   try {
-    const result = await db
+    const { statusVerifikasi } = req.query;
+    const validStatus = ["pending", "disetujui", "ditolak"];
+    if (statusVerifikasi && !validStatus.includes(statusVerifikasi as string)) {
+      res.status(400).json({ message: "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak" });
+      return;
+    }
+    const query = db
       .select(SELECT_FIELDS)
       .from(referensiTsl)
-      .leftJoin(users, eq(referensiTsl.createdBy, users.id))
-      .orderBy(referensiTsl.createdAt);
+      .leftJoin(users, eq(referensiTsl.createdBy, users.id));
+ 
+    const result = statusVerifikasi
+      ? await query.where(eq(referensiTsl.statusVerifikasi, statusVerifikasi as "pending" | "disetujui" | "ditolak")).orderBy(referensiTsl.createdAt)
+      : await query.orderBy(referensiTsl.createdAt);
 
     res.status(200).json({ data: result });
   } catch {
@@ -148,7 +156,7 @@ export async function createReferensi(
       return;
     }
 
-    if (!VALID_JENIS.includes(fields.jenis)) {
+    if (fields.jenis &&!VALID_JENIS.includes(fields.jenis)) {
       res.status(400).json({ message: "Jenis TSL tidak valid" });
       return;
     }
@@ -178,6 +186,7 @@ export async function updateReferensi(
     if (isNaN(id)) {
       res.status(400).json({ message: "ID tidak valid" });
       return;
+      
     }
 
     const user = req.user!;
@@ -188,6 +197,7 @@ export async function updateReferensi(
       return;
     }
 
+<<<<<<< HEAD
     if (isNotOwner(user.role, existing.createdBy, user.id)) {
       res
         .status(403)
@@ -213,21 +223,29 @@ export async function updateReferensi(
         return;
       }
 
+=======
+    if (user.role === "bidang_wilayah") {
+>>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
       const fields = buildReferensiFields(req.body);
       if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
         res.status(400).json({ message: "Jenis TSL tidak valid" });
         return;
       }
-
+ 
       const [updated] = await db
         .update(referensiTsl)
         .set({
           pendingChanges: fields,
           statusVerifikasi: "pending",
+<<<<<<< HEAD
+=======
+          createdBy: existing.createdBy ?? user.id,
+>>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
           updatedAt: new Date(),
         })
         .where(eq(referensiTsl.id, id))
         .returning();
+<<<<<<< HEAD
 
       res
         .status(200)
@@ -235,6 +253,13 @@ export async function updateReferensi(
           message: "Perubahan telah diajukan, menunggu persetujuan admin",
           data: updated,
         });
+=======
+ 
+      res.status(200).json({
+        message: "Perubahan telah diajukan, menunggu persetujuan admin",
+        data: updated,
+      });
+>>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
       return;
     }
 
@@ -300,6 +325,7 @@ export async function deleteReferensi(
     }
 
     if (user.role === "bidang_wilayah") {
+<<<<<<< HEAD
       if (existing.statusVerifikasi === "pending") {
         res
           .status(403)
@@ -317,11 +343,14 @@ export async function deleteReferensi(
         return;
       }
 
+=======
+>>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
       await db
         .update(referensiTsl)
         .set({
           pendingChanges: { _action: "delete" },
           statusVerifikasi: "pending",
+<<<<<<< HEAD
           updatedAt: new Date(),
         })
         .where(eq(referensiTsl.id, id));
@@ -332,6 +361,14 @@ export async function deleteReferensi(
           message:
             "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin",
         });
+=======
+          createdBy: existing.createdBy ?? user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(referensiTsl.id, id));
+ 
+      res.status(200).json({ message: "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin" });
+>>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
       return;
     }
 

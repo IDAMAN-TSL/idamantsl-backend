@@ -21,8 +21,8 @@ export const verifikasiLog = pgTable("verifikasi_log", {
   catatan: text("catatan"),
 
   // Siapa yang mengajukan (Bidang Wilayah)
-  diajukanOleh: integer("diajukan_oleh").references(() => users.id),
-  
+  createdBy: integer("created_by").references(() => users.id),
+
   // Admin Pusat yang melakukan verifikasi
   verifikasiOleh: integer("verifikasi_oleh").references(() => users.id),
 

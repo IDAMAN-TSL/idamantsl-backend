@@ -318,7 +318,6 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
     res.status(200).json({ message: "User berhasil dihapus" });
   } catch (error) {
-    console.error("[ERROR] deleteUser:", error);
     res.status(500).json({ message: "Gagal menghapus user" });
   }
 }

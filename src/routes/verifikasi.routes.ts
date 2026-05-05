@@ -9,15 +9,13 @@ import {
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 
 const router = Router();
+// Semua role yang sudah login bisa akses
+router.get("/approved", authenticate, getDataApproved);
 
-// Semua endpoint verifikasi hanya untuk admin_pusat
-router.use(authenticate, authorize("admin_pusat"));
-
-// Semua route verifikasi hanya untuk admin_pusat
-router.get("/pending", authorize("admin_pusat"), getDataPending);
-router.get("/approved", authorize("admin_pusat"), getDataApproved);
-router.get("/log", authorize("admin_pusat"), getVerifikasiLog);
-router.post("/approve", authorize("admin_pusat"), approveData);
-router.post("/tolak", authorize("admin_pusat"), tolakData);
+// Hanya admin_pusat
+router.get("/pending", authenticate, authorize("admin_pusat"), getDataPending);
+router.get("/log", authenticate, authorize("admin_pusat"), getVerifikasiLog);
+router.post("/approve", authenticate, authorize("admin_pusat"), approveData);
+router.post("/tolak", authenticate, authorize("admin_pusat"), tolakData);
 
 export default router;
