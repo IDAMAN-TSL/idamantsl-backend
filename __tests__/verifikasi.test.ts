@@ -99,9 +99,16 @@ describe("Verifikasi Endpoints", () => {
   describe("GET /api/verifikasi/pending", () => {
     it("berhasil ambil data pending sebagai admin pusat", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+
       (mockDb.select as jest.Mock)
         .mockReturnValueOnce(mockSelectManyChain([mockReferensiPending]))
-        .mockReturnValueOnce(mockSelectManyChain([mockPenangkaranPending]));
+        .mockReturnValueOnce(mockSelectManyChain([mockPenangkaranPending]))
+        .mockReturnValueOnce({
+          from: jest.fn().mockResolvedValue([
+            { id: 1, nama: "Admin BBKSDA Jabar" },
+            { id: 2, nama: "Budi Santoso" },
+          ]),
+        });
 
       const res = await request(app)
         .get("/api/verifikasi/pending")

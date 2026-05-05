@@ -16,9 +16,10 @@ jest.mock("jsonwebtoken", () => ({
   verify: jest.fn(),
   sign: jest.fn(),
 }));
-const mockAdmin    = { id: 1, role: "admin_pusat" };
-const mockBidang   = { id: 5, role: "bidang_wilayah" };
-const mockSeksi    = { id: 6, role: "seksi_wilayah" };
+
+const mockAdmin  = { id: 1, role: "admin_pusat" };
+const mockBidang = { id: 5, role: "bidang_wilayah" };
+const mockSeksi  = { id: 6, role: "seksi_wilayah" };
 
 const mockReferensi = {
   id: 1,
@@ -44,6 +45,7 @@ const mockReferensi = {
 };
 
 const TOKEN = "Bearer mock-token";
+
 function setUser(user: typeof mockAdmin | typeof mockBidang | typeof mockSeksi) {
   (jwt.verify as jest.Mock).mockReturnValue(user);
 }
@@ -88,6 +90,9 @@ function mockDelete() {
 describe("Referensi TSL Controller", () => {
 
   beforeEach(() => jest.clearAllMocks());
+
+  // ─── GET /api/referensi-tsl ───────────────────────────────────────────────
+
   describe("GET /api/referensi-tsl", () => {
     it("200 - semua role bisa akses list", async () => {
       setUser(mockSeksi);
@@ -130,6 +135,9 @@ describe("Referensi TSL Controller", () => {
       expect(res.status).toBe(401);
     });
   });
+
+  // ─── GET /api/referensi-tsl/:id ───────────────────────────────────────────
+
   describe("GET /api/referensi-tsl/:id", () => {
     it("200 - berhasil ambil detail", async () => {
       setUser(mockSeksi);
@@ -165,6 +173,9 @@ describe("Referensi TSL Controller", () => {
       expect(res.body.message).toBe("ID tidak valid");
     });
   });
+
+  // ─── POST /api/referensi-tsl ──────────────────────────────────────────────
+
   describe("POST /api/referensi-tsl", () => {
     const validPayload = {
       namaDaerah: "Elang Jawa",
@@ -248,136 +259,152 @@ describe("Referensi TSL Controller", () => {
       expect(res.status).toBe(500);
     });
   });
+
+  // ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────
+
   describe("PUT /api/referensi-tsl/:id", () => {
-    it("403 - bidang_wilayah update data milik sendiri tapi statusVerifikasi pending", async () => {
-  setUser(mockBidang);
-  mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
 
-  const res = await request(app)
-    .put("/api/referensi-tsl/1")
-    .set("Authorization", TOKEN)
-    .send({ namaDaerah: "Update Gagal" });
+    it("200 - admin_pusat berhasil update", async () => {
+      setUser(mockAdmin);
+      mockSelect([mockReferensi]);
+      mockUpdate([{ ...mockReferensi, namaDaerah: "Harimau Jawa Updated" }]);
 
-  expect(res.status).toBe(403);
-  expect(res.body.message).toBe("Data sedang menunggu persetujuan admin, tidak bisa diubah");
-});
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ namaDaerah: "Harimau Jawa Updated" });
 
-  it("403 - bidang_wilayah update data milik sendiri tapi statusVerifikasi ditolak", async () => {
-    setUser(mockBidang);
-    mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "ditolak", catatanVerifikasi: "Data tidak lengkap" }]);
-
-    const res = await request(app)
-      .put("/api/referensi-tsl/1")
-      .set("Authorization", TOKEN)
-      .send({ namaDaerah: "Update Gagal" });
-
-    expect(res.status).toBe(403);
-    expect(res.body.message).toBe("Data ditolak oleh admin");
-    expect(res.body.catatanVerifikasi).toBe("Data tidak lengkap");
-  });
-
-  it("400 - bidang_wilayah update dengan jenis tidak valid", async () => {
-    setUser(mockBidang);
-    mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "disetujui" }]);
-
-    const res = await request(app)
-      .put("/api/referensi-tsl/1")
-      .set("Authorization", TOKEN)
-      .send({ jenis: "tidak_valid" });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Jenis TSL tidak valid");
-  });
-
-  it("500 - error server saat update", async () => {
-    setUser(mockAdmin);
-    (db.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
-
-    const res = await request(app)
-      .put("/api/referensi-tsl/1")
-      .set("Authorization", TOKEN)
-      .send({ namaDaerah: "Test" });
-
-    expect(res.status).toBe(500);
-  });
-      it("200 - admin_pusat berhasil update", async () => {
-        setUser(mockAdmin);
-        mockSelect([mockReferensi]);
-        mockUpdate([{ ...mockReferensi, namaDaerah: "Harimau Jawa Updated" }]);
-
-        const res = await request(app)
-          .put("/api/referensi-tsl/1")
-          .set("Authorization", TOKEN)
-          .send({ namaDaerah: "Harimau Jawa Updated" });
-
-        expect(res.status).toBe(200);
-        expect(res.body.message).toBe("Referensi TSL berhasil diperbarui");
-      });
-
-      it("200 - bidang_wilayah update data milik sendiri → kembali pending", async () => {
-        setUser(mockBidang);
-        // createdBy: 5 = mockBidang.id
-        mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "disetujui" }]);
-        mockUpdate([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
-
-        const res = await request(app)
-          .put("/api/referensi-tsl/1")
-          .set("Authorization", TOKEN)
-          .send({ namaDaerah: "Update Oleh Bidang" });
-
-        expect(res.status).toBe(200);
-        expect(res.body.data.statusVerifikasi).toBe("pending");
-      });
-
-      it("403 - bidang_wilayah update data milik orang lain", async () => {
-        setUser(mockBidang);
-        // createdBy: 1 = bukan milik mockBidang (id 5)
-        mockSelect([{ ...mockReferensi, createdBy: 1 }]);
-
-        const res = await request(app)
-          .put("/api/referensi-tsl/1")
-          .set("Authorization", TOKEN)
-          .send({ namaDaerah: "Coba Update" });
-
-        expect(res.status).toBe(403);
-      });
-
-      it("404 - data tidak ditemukan saat update", async () => {
-        setUser(mockAdmin);
-        mockSelect([]);
-
-        const res = await request(app)
-          .put("/api/referensi-tsl/999")
-          .set("Authorization", TOKEN)
-          .send({ namaDaerah: "Test" });
-
-        expect(res.status).toBe(404);
-      });
-
-      it("400 - jenis tidak valid saat update", async () => {
-        setUser(mockAdmin);
-        mockSelect([mockReferensi]);
-
-        const res = await request(app)
-          .put("/api/referensi-tsl/1")
-          .set("Authorization", TOKEN)
-          .send({ jenis: "tidak_valid" });
-
-        expect(res.status).toBe(400);
-      });
-
-      it("400 - ID tidak valid saat update", async () => {
-        setUser(mockAdmin);
-
-        const res = await request(app)
-          .put("/api/referensi-tsl/abc")
-          .set("Authorization", TOKEN)
-          .send({ namaDaerah: "Test" });
-
-        expect(res.status).toBe(400);
-      });
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Referensi TSL berhasil diperbarui");
     });
+
+    it("200 - bidang_wilayah update data apapun → masuk pendingChanges & status pending", async () => {
+      setUser(mockBidang);
+      // Controller tidak cek createdBy untuk bidang_wilayah — semua data bisa diajukan
+      mockSelect([{ ...mockReferensi, createdBy: 1, statusVerifikasi: "disetujui" }]);
+      mockUpdate([{ ...mockReferensi, createdBy: 1, statusVerifikasi: "pending" }]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ namaDaerah: "Update Oleh Bidang" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Perubahan telah diajukan, menunggu persetujuan admin");
+      expect(res.body.data.statusVerifikasi).toBe("pending");
+    });
+
+    it("200 - bidang_wilayah update data milik sendiri → masuk pendingChanges & status pending", async () => {
+      setUser(mockBidang);
+      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "disetujui" }]);
+      mockUpdate([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ namaDaerah: "Update Milik Sendiri" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Perubahan telah diajukan, menunggu persetujuan admin");
+      expect(res.body.data.statusVerifikasi).toBe("pending");
+    });
+
+    it("200 - bidang_wilayah update data yang statusVerifikasi pending → tetap diproses", async () => {
+      // Controller tidak memblokir update meski statusVerifikasi sudah pending
+      setUser(mockBidang);
+      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
+      mockUpdate([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ namaDaerah: "Update Saat Pending" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Perubahan telah diajukan, menunggu persetujuan admin");
+    });
+
+    it("200 - bidang_wilayah update data yang statusVerifikasi ditolak → diajukan ulang", async () => {
+      // Controller tidak memblokir update meski statusVerifikasi ditolak
+      setUser(mockBidang);
+      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "ditolak", catatanVerifikasi: "Data tidak lengkap" }]);
+      mockUpdate([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ namaDaerah: "Update Setelah Ditolak" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Perubahan telah diajukan, menunggu persetujuan admin");
+    });
+
+    it("400 - bidang_wilayah update dengan jenis tidak valid", async () => {
+      setUser(mockBidang);
+      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "disetujui" }]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ jenis: "tidak_valid" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Jenis TSL tidak valid");
+    });
+
+    it("400 - admin_pusat update dengan jenis tidak valid", async () => {
+      setUser(mockAdmin);
+      mockSelect([mockReferensi]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ jenis: "tidak_valid" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Jenis TSL tidak valid");
+    });
+
+    it("404 - data tidak ditemukan saat update", async () => {
+      setUser(mockAdmin);
+      mockSelect([]);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/999")
+        .set("Authorization", TOKEN)
+        .send({ namaDaerah: "Test" });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("400 - ID tidak valid saat update", async () => {
+      setUser(mockAdmin);
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/abc")
+        .set("Authorization", TOKEN)
+        .send({ namaDaerah: "Test" });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("500 - error server saat update", async () => {
+      setUser(mockAdmin);
+      (db.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
+
+      const res = await request(app)
+        .put("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN)
+        .send({ namaDaerah: "Test" });
+
+      expect(res.status).toBe(500);
+    });
+  });
+
+  // ─── DELETE /api/referensi-tsl/:id ───────────────────────────────────────
+
   describe("DELETE /api/referensi-tsl/:id", () => {
+
     it("200 - admin_pusat berhasil hapus", async () => {
       setUser(mockAdmin);
       mockSelect([mockReferensi]);
@@ -391,22 +418,53 @@ describe("Referensi TSL Controller", () => {
       expect(res.body.message).toBe("Referensi TSL berhasil dihapus");
     });
 
-    it("200 - bidang_wilayah hapus data milik sendiri", async () => {
+    it("200 - bidang_wilayah hapus data milik sendiri → jadi pending delete", async () => {
+      // Controller tidak cek createdBy — semua bidang_wilayah langsung set pendingChanges._action: delete
       setUser(mockBidang);
       mockSelect([{ ...mockReferensi, createdBy: 5 }]);
-      mockDelete();
+      mockUpdate();
 
       const res = await request(app)
         .delete("/api/referensi-tsl/1")
         .set("Authorization", TOKEN);
 
       expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Pengajuan penghapusan telah dikirim, menunggu persetujuan admin");
     });
 
-    it("200 - bidang_wilayah hapus data milik orang lain (jadi pending)", async () => {
+    it("200 - bidang_wilayah hapus data milik orang lain → jadi pending delete", async () => {
+      // Controller tidak membedakan createdBy — semua bidang_wilayah masuk alur yang sama
       setUser(mockBidang);
       mockSelect([{ ...mockReferensi, createdBy: 1 }]);
-      mockUpdate(); 
+      mockUpdate();
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Pengajuan penghapusan telah dikirim, menunggu persetujuan admin");
+    });
+
+    it("200 - bidang_wilayah hapus data yang statusVerifikasi pending → tetap diproses", async () => {
+      // Controller tidak memblokir hapus meski statusVerifikasi sudah pending
+      setUser(mockBidang);
+      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
+      mockUpdate();
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Pengajuan penghapusan telah dikirim, menunggu persetujuan admin");
+    });
+
+    it("200 - bidang_wilayah hapus data yang statusVerifikasi ditolak → diajukan ulang", async () => {
+      // Controller tidak memblokir hapus meski statusVerifikasi ditolak
+      setUser(mockBidang);
+      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "ditolak", catatanVerifikasi: "Data tidak valid" }]);
+      mockUpdate();
 
       const res = await request(app)
         .delete("/api/referensi-tsl/1")
@@ -445,30 +503,6 @@ describe("Referensi TSL Controller", () => {
         .set("Authorization", TOKEN);
 
       expect(res.status).toBe(400);
-    });
-    it("403 - bidang_wilayah hapus data yang statusVerifikasi pending", async () => {
-      setUser(mockBidang);
-      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
-
-      const res = await request(app)
-        .delete("/api/referensi-tsl/1")
-        .set("Authorization", TOKEN);
-
-      expect(res.status).toBe(403);
-      expect(res.body.message).toBe("Data sedang menunggu persetujuan admin, tidak bisa dihapus");
-    });
-
-    it("403 - bidang_wilayah hapus data yang statusVerifikasi ditolak", async () => {
-      setUser(mockBidang);
-      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "ditolak", catatanVerifikasi: "Data tidak valid" }]);
-
-      const res = await request(app)
-        .delete("/api/referensi-tsl/1")
-        .set("Authorization", TOKEN);
-
-      expect(res.status).toBe(403);
-      expect(res.body.message).toBe("Data ditolak oleh admin");
-      expect(res.body.catatanVerifikasi).toBe("Data tidak valid");
     });
 
     it("500 - error server saat delete", async () => {
