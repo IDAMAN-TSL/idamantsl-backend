@@ -214,6 +214,7 @@ export async function getDataPending(
       total: referensiMapped.length + penangkaranMapped.length,
     });
   } catch (error) {
+    console.error("getDataPending error:", error);
     res.status(500).json({ message: "Gagal mengambil data pending" });
   }
 }
@@ -252,6 +253,7 @@ export async function getDataApproved(
       total: referensiApproved.length + penangkaranApproved.length,
     });
   } catch (error) {
+    console.error("getDataApproved error:", error);
     res.status(500).json({ message: "Gagal mengambil data approved" });
   }
 }
@@ -326,6 +328,7 @@ export async function approveData(
 
     res.status(200).json({ message: "Data berhasil disetujui" });
   } catch (error) {
+    console.error("approveData error:", error);
     res.status(500).json({ message: "Gagal menyetujui data" });
   }
 }
@@ -387,6 +390,7 @@ export async function tolakData(
 
     res.status(200).json({ message: "Data berhasil ditolak", catatan });
   } catch (error) {
+    console.error("tolakData error:", error);
     res.status(500).json({ message: "Gagal menolak data" });
   }
 }
@@ -405,6 +409,7 @@ export async function getVerifikasiLog(
 
     res.status(200).json({ data: result });
   } catch (error) {
+    console.error("getVerifikasiLog error:", error);
     res.status(500).json({ message: "Gagal mengambil log verifikasi" });
   }
 }

@@ -14,6 +14,14 @@ interface AuthRequest extends Request {
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
 
+const isNotOwner = (
+  role: string | undefined,
+  createdBy: number | null,
+  userId: number | undefined
+): boolean => {
+  return role === "bidang_wilayah" && createdBy !== userId;
+};
+
 async function findReferensiById(id: number) {
   const result = await db
     .select()
@@ -76,11 +84,8 @@ const SELECT_FIELDS = {
   statusIucn: referensiTsl.statusIucn,
   statusVerifikasi: referensiTsl.statusVerifikasi,
   catatanVerifikasi: referensiTsl.catatanVerifikasi,
-<<<<<<< HEAD
   // Diperlukan oleh frontend non-admin untuk mendeteksi jenis pengajuan
   // (Tambah / Perbarui / Hapus) tanpa akses ke /api/verifikasi/*
-=======
->>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
   pendingChanges: referensiTsl.pendingChanges,
   createdBy: referensiTsl.createdBy,
   namaInputor: users.nama,
@@ -186,7 +191,6 @@ export async function updateReferensi(
     if (isNaN(id)) {
       res.status(400).json({ message: "ID tidak valid" });
       return;
-      
     }
 
     const user = req.user!;
@@ -197,7 +201,6 @@ export async function updateReferensi(
       return;
     }
 
-<<<<<<< HEAD
     if (isNotOwner(user.role, existing.createdBy, user.id)) {
       res
         .status(403)
@@ -223,9 +226,6 @@ export async function updateReferensi(
         return;
       }
 
-=======
-    if (user.role === "bidang_wilayah") {
->>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
       const fields = buildReferensiFields(req.body);
       if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
         res.status(400).json({ message: "Jenis TSL tidak valid" });
@@ -237,15 +237,11 @@ export async function updateReferensi(
         .set({
           pendingChanges: fields,
           statusVerifikasi: "pending",
-<<<<<<< HEAD
-=======
           createdBy: existing.createdBy ?? user.id,
->>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
           updatedAt: new Date(),
         })
         .where(eq(referensiTsl.id, id))
         .returning();
-<<<<<<< HEAD
 
       res
         .status(200)
@@ -253,13 +249,6 @@ export async function updateReferensi(
           message: "Perubahan telah diajukan, menunggu persetujuan admin",
           data: updated,
         });
-=======
- 
-      res.status(200).json({
-        message: "Perubahan telah diajukan, menunggu persetujuan admin",
-        data: updated,
-      });
->>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
       return;
     }
 
@@ -325,7 +314,6 @@ export async function deleteReferensi(
     }
 
     if (user.role === "bidang_wilayah") {
-<<<<<<< HEAD
       if (existing.statusVerifikasi === "pending") {
         res
           .status(403)
@@ -343,14 +331,12 @@ export async function deleteReferensi(
         return;
       }
 
-=======
->>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
       await db
         .update(referensiTsl)
         .set({
           pendingChanges: { _action: "delete" },
           statusVerifikasi: "pending",
-<<<<<<< HEAD
+          createdBy: existing.createdBy ?? user.id,
           updatedAt: new Date(),
         })
         .where(eq(referensiTsl.id, id));
@@ -361,14 +347,6 @@ export async function deleteReferensi(
           message:
             "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin",
         });
-=======
-          createdBy: existing.createdBy ?? user.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(referensiTsl.id, id));
- 
-      res.status(200).json({ message: "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin" });
->>>>>>> cddaa76e9d48bc65e1aa2bda8c3062b8f4ce557f
       return;
     }
 
@@ -378,3 +356,4 @@ export async function deleteReferensi(
     res.status(500).json({ message: "Gagal menghapus referensi TSL" });
   }
 }
+
