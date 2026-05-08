@@ -1,26 +1,30 @@
 import { Response } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray, type InferInsertModel } from "drizzle-orm";
 import { db } from "../../db/index";
 import { penangkaran } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
 
+type PenangkaranInsert = InferInsertModel<typeof penangkaran>;
+
 const buildPenangkaranFields = (body: Record<string, unknown>) => ({
-  nomor: body.nomor as string,
-  namaPenangkaran: body.namaPenangkaran as string,
-  nomorSk: body.nomorSk as string,
-  tanggalSk: body.tanggalSk ? new Date(body.tanggalSk as string) : null,
-  penerbit: body.penerbit as string,
-  akhirMasaBerlaku: body.akhirMasaBerlaku
-    ? new Date(body.akhirMasaBerlaku as string)
-    : null,
-  namaDirektur: body.namaDirektur as string,
-  nomorTelepon: body.nomorTelepon as string,
-  bidangWilayahId: body.bidangWilayahId ? Number(body.bidangWilayahId) : null,
-  seksiWilayahId: body.seksiWilayahId ? Number(body.seksiWilayahId) : null,
-  alamatKantor: body.alamatKantor as string,
-  alamatPenangkaran: body.alamatPenangkaran as string,
-  koordinatLokasi: body.koordinatLokasi as string,
-  tslId: body.tslId ? Number(body.tslId) : null,
+  ...("namaPenangkaran" in body && { namaPenangkaran: body.namaPenangkaran as string }),
+  ...("nomorSk" in body && { nomorSk: (body.nomorSk as string) ?? null }),
+  ...("tanggalSk" in body && { tanggalSk: body.tanggalSk ? new Date(body.tanggalSk as string) : null }),
+  ...("fileSk" in body && { fileSk: (body.fileSk as string) ?? null }),
+  ...("penerbit" in body && { penerbit: (body.penerbit as string) ?? null }),
+  ...("akhirMasaBerlaku" in body && { akhirMasaBerlaku: body.akhirMasaBerlaku ? new Date(body.akhirMasaBerlaku as string) : null }),
+  ...("namaDirektur" in body && { namaDirektur: (body.namaDirektur as string) ?? null }),
+  ...("nomorTelepon" in body && { nomorTelepon: (body.nomorTelepon as string) ?? null }),
+  ...("bidangWilayahId" in body && { bidangWilayahId: body.bidangWilayahId ? Number(body.bidangWilayahId) : null }),
+  ...("seksiWilayahId" in body && { seksiWilayahId: body.seksiWilayahId ? Number(body.seksiWilayahId) : null }),
+  ...("alamatKantor" in body && { alamatKantor: (body.alamatKantor as string) ?? null }),
+  ...("alamatPenangkaran" in body && { alamatPenangkaran: (body.alamatPenangkaran as string) ?? null }),
+  ...("koordinatLokasi" in body && { koordinatLokasi: (body.koordinatLokasi as string) ?? null }),
+  ...("tslId" in body && { tslId: body.tslId ? Number(body.tslId) : null }),
+  ...("statusPerlindunganNasional" in body && { statusPerlindunganNasional: (body.statusPerlindunganNasional as PenangkaranInsert["statusPerlindunganNasional"]) ?? null }),
+  ...("statusCites" in body && { statusCites: (body.statusCites as PenangkaranInsert["statusCites"]) ?? null }),
+  ...("jantan" in body && { jantan: body.jantan !== null ? Number(body.jantan) : null }),
+  ...("betina" in body && { betina: body.betina !== null ? Number(body.betina) : null }),
 });
 
 const withRelations = {
@@ -46,14 +50,35 @@ const isNotOwner = (
 };
 export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
   try {
+    const { status } = req.query;
+    const validStatus = ["pending", "disetujui", "ditolak"];
+
+    if (status && !validStatus.includes(status as string)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status tidak valid. Gunakan: pending, disetujui, atau ditolak",
+      });
+    }
+
     const data = await db.query.penangkaran.findMany({
+      where: status
+        ? eq(penangkaran.statusVerifikasi, status as "pending" | "disetujui" | "ditolak")
+        : undefined,
       orderBy: desc(penangkaran.createdAt),
-      with: withRelations,
+      with: {
+        bidangWilayah: true,
+        seksiWilayah: true,
+        tsl: true,
+        createdBy: {
+          columns: { id: true, nama: true, role: true },
+        },
+      },
     });
 
     return res.status(200).json({
       success: true,
       message: "Data penangkaran berhasil diambil",
+      total: data.length,
       data,
     });
   } catch (error) {
@@ -154,7 +179,6 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
 
     const statusVerifikasi =
       req.user?.role === "admin_pusat" ? existing.statusVerifikasi : "pending";
-
     const [data] = await db
       .update(penangkaran)
       .set({
@@ -201,5 +225,57 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("Delete penangkaran error:", error);
     return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+  }
+};
+export const bulkDeletePenangkaran = async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "ids wajib diisi dan harus berupa array",
+      });
+    }
+
+    const numericIds = ids.map(Number).filter(id => !isNaN(id));
+    if (numericIds.length !== ids.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Semua id harus berupa angka",
+      });
+    }
+
+    if (req.user?.role === "bidang_wilayah") {
+      const dataList = await Promise.all(
+        numericIds.map(id => findPenangkaranById(id))
+      );
+
+      const notOwned = dataList.some(
+        d => !d || d.createdBy !== req.user?.id
+      );
+
+      if (notOwned) {
+        return res.status(403).json({
+          success: false,
+          message: "Beberapa data tidak ditemukan atau bukan milik Anda",
+        });
+      }
+    }
+
+    await db
+      .delete(penangkaran)
+      .where(inArray(penangkaran.id, numericIds));
+
+    return res.status(200).json({
+      success: true,
+      message: `${numericIds.length} data penangkaran berhasil dihapus`,
+    });
+  } catch (error) {
+    console.error("Bulk delete penangkaran error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan server",
+    });
   }
 };

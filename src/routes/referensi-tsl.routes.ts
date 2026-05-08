@@ -5,6 +5,7 @@ import {
   createReferensi,
   updateReferensi,
   deleteReferensi,
+  bulkDeleteReferensi,
 } from "../controllers/referensi-tsl.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 
@@ -20,6 +21,7 @@ router.get("/:id", getReferensiById);
 // WRITE → hanya admin_pusat & bidang_wilayah
 router.post("/", authorize("admin_pusat", "bidang_wilayah"), createReferensi);
 router.put("/:id", authorize("admin_pusat", "bidang_wilayah"), updateReferensi);
+router.delete("/bulk", authorize("admin_pusat", "bidang_wilayah"), bulkDeleteReferensi);
 router.delete("/:id", authorize("admin_pusat", "bidang_wilayah"), deleteReferensi);
 
 export default router;

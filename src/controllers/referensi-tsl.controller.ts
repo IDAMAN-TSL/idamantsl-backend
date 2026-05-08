@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { eq,inArray } from "drizzle-orm";
 import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 
@@ -253,3 +253,55 @@ export async function deleteReferensi(req: AuthRequest, res: Response): Promise<
     res.status(500).json({ message: "Gagal menghapus referensi TSL" });
   }
 }
+export const bulkDeleteReferensi = async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "ids wajib diisi dan harus berupa array",
+      });
+    }
+
+    const numericIds = ids.map(Number).filter(id => !isNaN(id));
+    if (numericIds.length !== ids.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Semua id harus berupa angka",
+      });
+    }
+
+    if (req.user?.role === "bidang_wilayah") {
+      const dataList = await Promise.all(
+        numericIds.map(id => findReferensiById(id))
+      );
+
+      const notOwned = dataList.some(
+        d => !d || d.createdBy !== req.user?.id
+      );
+
+      if (notOwned) {
+        return res.status(403).json({
+          success: false,
+          message: "Beberapa data tidak ditemukan atau bukan milik Anda",
+        });
+      }
+    }
+
+    await db
+      .delete(referensiTsl)
+      .where(inArray(referensiTsl.id, numericIds));
+
+    return res.status(200).json({
+      success: true,
+      message: `${numericIds.length} data referensi TSL berhasil dihapus`,
+    });
+  } catch (error) {
+    console.error("Bulk delete referensi TSL error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan server",
+    });
+  }
+};
