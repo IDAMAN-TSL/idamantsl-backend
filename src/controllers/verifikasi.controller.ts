@@ -82,10 +82,11 @@ function getTableDef(tabel: TabelTarget): TableDef {
 // ─── Helper: Tentukan jenis pengajuan ────────────────────────────────────────
 
 function getJenisPengajuan(
-  pendingChanges: Record<string, unknown> | null
+  pendingChanges: Record<string, unknown> | null,
 ): JenisPengajuan {
   if (pendingChanges?._action === "delete") return "hapus";
-  if (pendingChanges && Object.keys(pendingChanges).length > 0) return "perbarui";
+  if (pendingChanges && Object.keys(pendingChanges).length > 0)
+    return "perbarui";
   // pendingChanges null = data baru yang belum disetujui (tambah)
   return "tambah";
 }
@@ -99,7 +100,7 @@ async function insertVerifikasiLog(
   jenisPengajuan: JenisPengajuan,
   createdBy: number | null,
   verifikasiOleh: number,
-  catatan?: string | null
+  catatan?: string | null,
 ) {
   await db.insert(verifikasiLog).values({
     tabelTarget,
@@ -116,7 +117,7 @@ async function insertVerifikasiLog(
 
 function validateBaseFields(
   tabelTarget: unknown,
-  targetId: unknown
+  targetId: unknown,
 ): string | null {
   if (!tabelTarget || !targetId) return "tabelTarget dan targetId wajib diisi";
   if (!VALID_TABEL.includes(tabelTarget as TabelTarget))
@@ -128,7 +129,7 @@ function validateBaseFields(
 
 async function findPendingRecord(
   tabel: TabelTarget,
-  targetId: number
+  targetId: number,
 ): Promise<{ record: Record<string, unknown> } | { error: string; status: number }> {
   const record = await getTableDef(tabel).find(targetId);
   if (!record) return { error: "Data tidak ditemukan", status: 404 };
@@ -143,7 +144,9 @@ async function findPendingRecord(
 
 // ─── Helper: Ambil nama inputor dari users ────────────────────────────────────
 
-async function getNamaInputor(createdBy: number | null): Promise<string | null> {
+async function getNamaInputor(
+  createdBy: number | null,
+): Promise<string | null> {
   if (!createdBy) return null;
   const result = await db
     .select({ nama: users.nama })
@@ -161,30 +164,40 @@ export async function getDataPending(
 ): Promise<void> {
   try {
     const [referensiPending, penangkaranPending] = await Promise.all([
-      db.select({
-        id: referensiTsl.id,
-        namaDaerah: referensiTsl.namaDaerah,
-        jenis: referensiTsl.jenis,
-        statusVerifikasi: referensiTsl.statusVerifikasi,
-        pendingChanges: referensiTsl.pendingChanges,
-        createdBy: referensiTsl.createdBy,
-        updatedAt: referensiTsl.updatedAt,
-      }).from(referensiTsl).where(eq(referensiTsl.statusVerifikasi, "pending")),
+      db
+        .select({
+          id: referensiTsl.id,
+          namaDaerah: referensiTsl.namaDaerah,
+          jenis: referensiTsl.jenis,
+          statusVerifikasi: referensiTsl.statusVerifikasi,
+          pendingChanges: referensiTsl.pendingChanges,
+          createdBy: referensiTsl.createdBy,
+          updatedAt: referensiTsl.updatedAt,
+        })
+        .from(referensiTsl)
+        .where(eq(referensiTsl.statusVerifikasi, "pending")),
 
-      db.select({
-        id: penangkaran.id,
-        namaPenangkaran: penangkaran.namaPenangkaran,
-        statusVerifikasi: penangkaran.statusVerifikasi,
-        pendingChanges: penangkaran.pendingChanges,
-        createdBy: penangkaran.createdBy,
-        updatedAt: penangkaran.updatedAt,
-      }).from(penangkaran).where(eq(penangkaran.statusVerifikasi, "pending")),
+      db
+        .select({
+          id: penangkaran.id,
+          namaPenangkaran: penangkaran.namaPenangkaran,
+          statusVerifikasi: penangkaran.statusVerifikasi,
+          pendingChanges: penangkaran.pendingChanges,
+          createdBy: penangkaran.createdBy,
+          updatedAt: penangkaran.updatedAt,
+        })
+        .from(penangkaran)
+        .where(eq(penangkaran.statusVerifikasi, "pending")),
     ]);
 
     // Ambil semua user sekaligus untuk mapping nama inputor
-    const allUsers = await db.select({ id: users.id, nama: users.nama }).from(users);
+    const allUsers = await db
+      .select({ id: users.id, nama: users.nama })
+      .from(users);
     const userMap: Record<number, string> = {};
-    allUsers.forEach(u => { userMap[u.id] = u.nama; });
+    allUsers.forEach((u) => {
+      userMap[u.id] = u.nama;
+    });
 
     const referensiMapped = referensiPending.map((r) => {
       const pendingChanges = r.pendingChanges as Record<string, unknown> | null;
@@ -227,28 +240,40 @@ export async function getDataApproved(
 ): Promise<void> {
   try {
     const [referensiApproved, penangkaranApproved] = await Promise.all([
-      db.select({
-        id: referensiTsl.id,
-        namaDaerah: referensiTsl.namaDaerah,
-        jenis: referensiTsl.jenis,
-        statusVerifikasi: referensiTsl.statusVerifikasi,
-        createdBy: referensiTsl.createdBy,
-        updatedAt: referensiTsl.updatedAt,
-      }).from(referensiTsl).where(eq(referensiTsl.statusVerifikasi, "disetujui")),
+      db
+        .select({
+          id: referensiTsl.id,
+          namaDaerah: referensiTsl.namaDaerah,
+          jenis: referensiTsl.jenis,
+          statusVerifikasi: referensiTsl.statusVerifikasi,
+          createdBy: referensiTsl.createdBy,
+          updatedAt: referensiTsl.updatedAt,
+        })
+        .from(referensiTsl)
+        .where(eq(referensiTsl.statusVerifikasi, "disetujui")),
 
-      db.select({
-        id: penangkaran.id,
-        namaPenangkaran: penangkaran.namaPenangkaran,
-        statusVerifikasi: penangkaran.statusVerifikasi,
-        createdBy: penangkaran.createdBy,
-        updatedAt: penangkaran.updatedAt,
-      }).from(penangkaran).where(eq(penangkaran.statusVerifikasi, "disetujui")),
+      db
+        .select({
+          id: penangkaran.id,
+          namaPenangkaran: penangkaran.namaPenangkaran,
+          statusVerifikasi: penangkaran.statusVerifikasi,
+          createdBy: penangkaran.createdBy,
+          updatedAt: penangkaran.updatedAt,
+        })
+        .from(penangkaran)
+        .where(eq(penangkaran.statusVerifikasi, "disetujui")),
     ]);
 
     res.status(200).json({
       data: {
-        referensi_tsl: referensiApproved.map(r => ({ ...r, tabelTarget: "referensi_tsl" })),
-        penangkaran: penangkaranApproved.map(p => ({ ...p, tabelTarget: "penangkaran" })),
+        referensi_tsl: referensiApproved.map((r) => ({
+          ...r,
+          tabelTarget: "referensi_tsl",
+        })),
+        penangkaran: penangkaranApproved.map((p) => ({
+          ...p,
+          tabelTarget: "penangkaran",
+        })),
       },
       total: referensiApproved.length + penangkaranApproved.length,
     });
@@ -301,11 +326,9 @@ export async function approveData(
         user.id,
         catatan ?? "Pengajuan penghapusan disetujui",
       );
-      res
-        .status(200)
-        .json({
-          message: "Pengajuan penghapusan disetujui, data telah dihapus",
-        });
+      res.status(200).json({
+        message: "Pengajuan penghapusan disetujui, data telah dihapus",
+      });
       return;
     }
 
@@ -363,7 +386,10 @@ export async function tolakData(
     }
 
     const { record } = result;
-    const pendingChanges = record.pendingChanges as Record<string, unknown> | null;
+    const pendingChanges = record.pendingChanges as Record<
+      string,
+      unknown
+    > | null;
     const jenisPengajuan = getJenisPengajuan(pendingChanges);
     const diajukanOleh = (record.createdBy as number | null) ?? null;
 

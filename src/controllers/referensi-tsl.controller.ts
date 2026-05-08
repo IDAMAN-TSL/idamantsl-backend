@@ -101,16 +101,28 @@ export async function getAllReferensi(
     const { statusVerifikasi } = req.query;
     const validStatus = ["pending", "disetujui", "ditolak"];
     if (statusVerifikasi && !validStatus.includes(statusVerifikasi as string)) {
-      res.status(400).json({ message: "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak" });
+      res
+        .status(400)
+        .json({
+          message:
+            "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak",
+        });
       return;
     }
     const query = db
       .select(SELECT_FIELDS)
       .from(referensiTsl)
       .leftJoin(users, eq(referensiTsl.createdBy, users.id));
- 
+
     const result = statusVerifikasi
-      ? await query.where(eq(referensiTsl.statusVerifikasi, statusVerifikasi as "pending" | "disetujui" | "ditolak")).orderBy(referensiTsl.createdAt)
+      ? await query
+          .where(
+            eq(
+              referensiTsl.statusVerifikasi,
+              statusVerifikasi as "pending" | "disetujui" | "ditolak",
+            ),
+          )
+          .orderBy(referensiTsl.createdAt)
       : await query.orderBy(referensiTsl.createdAt);
 
     res.status(200).json({ data: result });
@@ -161,7 +173,7 @@ export async function createReferensi(
       return;
     }
 
-    if (fields.jenis &&!VALID_JENIS.includes(fields.jenis)) {
+    if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
       res.status(400).json({ message: "Jenis TSL tidak valid" });
       return;
     }
@@ -210,12 +222,9 @@ export async function updateReferensi(
 
     if (user.role === "bidang_wilayah") {
       if (existing.statusVerifikasi === "pending") {
-        res
-          .status(403)
-          .json({
-            message:
-              "Data sedang menunggu persetujuan admin, tidak bisa diubah",
-          });
+        res.status(403).json({
+          message: "Data sedang menunggu persetujuan admin, tidak bisa diubah",
+        });
         return;
       }
       if (existing.statusVerifikasi === "ditolak") {
@@ -231,7 +240,7 @@ export async function updateReferensi(
         res.status(400).json({ message: "Jenis TSL tidak valid" });
         return;
       }
- 
+
       const [updated] = await db
         .update(referensiTsl)
         .set({
