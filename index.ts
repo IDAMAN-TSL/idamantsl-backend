@@ -6,6 +6,7 @@ import userRoutes from "./src/routes/user.routes";
 import referensiTslRoutes from "./src/routes/referensi-tsl.routes";
 import verifikasiRoutes from "./src/routes/verifikasi.routes";
 import wilayahRoutes from "./src/routes/wilayah.routes";
+import cors from "cors";
 
 dotenv.config();
 
