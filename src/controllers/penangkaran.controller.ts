@@ -1,27 +1,37 @@
 import { Response } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, type InferInsertModel } from "drizzle-orm";
 import { db } from "../../db/index";
 import { penangkaran } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
+import { isNotOwner, bulkDeleteHandler } from "../helpers/controller.helpers";
+
+type PenangkaranInsert = InferInsertModel<typeof penangkaran>;
+
+// ─── buildPenangkaranFields ───────────────────────────────────────────────────
+// Menggunakan "key" in body agar field yang tidak dikirim tidak overwrite data lama
 
 const buildPenangkaranFields = (body: Record<string, unknown>) => ({
-  nomor: body.nomor as string,
-  namaPenangkaran: body.namaPenangkaran as string,
-  nomorSk: body.nomorSk as string,
-  tanggalSk: body.tanggalSk ? new Date(body.tanggalSk as string) : null,
-  penerbit: body.penerbit as string,
-  akhirMasaBerlaku: body.akhirMasaBerlaku
-    ? new Date(body.akhirMasaBerlaku as string)
-    : null,
-  namaDirektur: body.namaDirektur as string,
-  nomorTelepon: body.nomorTelepon as string,
-  bidangWilayahId: body.bidangWilayahId ? Number(body.bidangWilayahId) : null,
-  seksiWilayahId: body.seksiWilayahId ? Number(body.seksiWilayahId) : null,
-  alamatKantor: body.alamatKantor as string,
-  alamatPenangkaran: body.alamatPenangkaran as string,
-  koordinatLokasi: body.koordinatLokasi as string,
-  tslId: body.tslId ? Number(body.tslId) : null,
+  ...("namaPenangkaran" in body && { namaPenangkaran: body.namaPenangkaran as string }),
+  ...("nomorSk" in body && { nomorSk: (body.nomorSk as string) ?? null }),
+  ...("tanggalSk" in body && { tanggalSk: body.tanggalSk ? new Date(body.tanggalSk as string) : null }),
+  ...("fileSk" in body && { fileSk: (body.fileSk as string) ?? null }),
+  ...("penerbit" in body && { penerbit: (body.penerbit as string) ?? null }),
+  ...("akhirMasaBerlaku" in body && { akhirMasaBerlaku: body.akhirMasaBerlaku ? new Date(body.akhirMasaBerlaku as string) : null }),
+  ...("namaDirektur" in body && { namaDirektur: (body.namaDirektur as string) ?? null }),
+  ...("nomorTelepon" in body && { nomorTelepon: (body.nomorTelepon as string) ?? null }),
+  ...("bidangWilayahId" in body && { bidangWilayahId: body.bidangWilayahId ? Number(body.bidangWilayahId) : null }),
+  ...("seksiWilayahId" in body && { seksiWilayahId: body.seksiWilayahId ? Number(body.seksiWilayahId) : null }),
+  ...("alamatKantor" in body && { alamatKantor: (body.alamatKantor as string) ?? null }),
+  ...("alamatPenangkaran" in body && { alamatPenangkaran: (body.alamatPenangkaran as string) ?? null }),
+  ...("koordinatLokasi" in body && { koordinatLokasi: (body.koordinatLokasi as string) ?? null }),
+  ...("tslId" in body && { tslId: body.tslId ? Number(body.tslId) : null }),
+  ...("statusPerlindunganNasional" in body && { statusPerlindunganNasional: (body.statusPerlindunganNasional as PenangkaranInsert["statusPerlindunganNasional"]) ?? null }),
+  ...("statusCites" in body && { statusCites: (body.statusCites as PenangkaranInsert["statusCites"]) ?? null }),
+  ...("jantan" in body && { jantan: body.jantan !== null ? Number(body.jantan) : null }),
+  ...("betina" in body && { betina: body.betina !== null ? Number(body.betina) : null }),
 });
+
+// ─── withRelations ────────────────────────────────────────────────────────────
 
 const withRelations = {
   bidangWilayah: true,
@@ -31,22 +41,33 @@ const withRelations = {
     columns: { id: true, nama: true, role: true },
   },
 } as const;
+
+// ─── findPenangkaranById ──────────────────────────────────────────────────────
+
 const findPenangkaranById = async (id: number) => {
   return await db.query.penangkaran.findFirst({
     where: eq(penangkaran.id, id),
   });
 };
 
-const isNotOwner = (
-  role: string | undefined,
-  createdBy: number | null,
-  userId: number | undefined
-): boolean => {
-  return role === "bidang_wilayah" && createdBy !== userId;
-};
+// ─── GET /api/penangkaran ─────────────────────────────────────────────────────
+
 export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
   try {
+    const { status } = req.query;
+    const validStatus = ["pending", "disetujui", "ditolak"];
+
+    if (status && !validStatus.includes(status as string)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status tidak valid. Gunakan: pending, disetujui, atau ditolak",
+      });
+    }
+
     const data = await db.query.penangkaran.findMany({
+      where: status
+        ? eq(penangkaran.statusVerifikasi, status as "pending" | "disetujui" | "ditolak")
+        : undefined,
       orderBy: desc(penangkaran.createdAt),
       with: withRelations,
     });
@@ -54,16 +75,16 @@ export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Data penangkaran berhasil diambil",
+      total: data.length,
       data,
     });
   } catch (error) {
     console.error("Get all penangkaran error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
+
+// ─── GET /api/penangkaran/:id ─────────────────────────────────────────────────
 
 export const getPenangkaranById = async (req: AuthRequest, res: Response) => {
   try {
@@ -73,17 +94,12 @@ export const getPenangkaranById = async (req: AuthRequest, res: Response) => {
       where: eq(penangkaran.id, Number(id)),
       with: {
         ...withRelations,
-        updatedBy: {
-          columns: { id: true, nama: true, role: true },
-        },
+        updatedBy: { columns: { id: true, nama: true, role: true } },
       },
     });
 
     if (!data) {
-      return res.status(404).json({
-        success: false,
-        message: "Data penangkaran tidak ditemukan",
-      });
+      return res.status(404).json({ success: false, message: "Data penangkaran tidak ditemukan" });
     }
 
     return res.status(200).json({
@@ -93,52 +109,42 @@ export const getPenangkaranById = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error("Get penangkaran by id error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
+
+// ─── POST /api/penangkaran ────────────────────────────────────────────────────
 
 export const createPenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const { namaPenangkaran } = req.body;
 
     if (!namaPenangkaran) {
-      return res.status(400).json({
-        success: false,
-        message: "Nama penangkaran wajib diisi",
-      });
+      return res.status(400).json({ success: false, message: "Nama penangkaran wajib diisi" });
     }
 
-    const statusVerifikasi =
-      req.user?.role === "admin_pusat" ? "disetujui" : "pending";
+    const statusVerifikasi = req.user?.role === "admin_pusat" ? "disetujui" : "pending";
 
     const [data] = await db
       .insert(penangkaran)
-      .values({
-        ...buildPenangkaranFields(req.body),
-        statusVerifikasi,
-        createdBy: req.user?.id,
-      })
+      .values({ ...buildPenangkaranFields(req.body), statusVerifikasi, createdBy: req.user?.id })
       .returning();
 
     return res.status(201).json({
       success: true,
-      message:
-        statusVerifikasi === "pending"
-          ? "Data penangkaran berhasil ditambahkan, menunggu verifikasi Admin Pusat"
-          : "Data penangkaran berhasil ditambahkan",
+      message: statusVerifikasi === "pending"
+        ? "Data penangkaran berhasil ditambahkan, menunggu verifikasi Admin Pusat"
+        : "Data penangkaran berhasil ditambahkan",
       data,
     });
   } catch (error) {
     console.error("Create penangkaran error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
+
+// ─── PUT /api/penangkaran/:id ─────────────────────────────────────────────────
+
 export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -152,8 +158,7 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki izin mengubah data ini" });
     }
 
-    const statusVerifikasi =
-      req.user?.role === "admin_pusat" ? existing.statusVerifikasi : "pending";
+    const statusVerifikasi = req.user?.role === "admin_pusat" ? existing.statusVerifikasi : "pending";
 
     const [data] = await db
       .update(penangkaran)
@@ -179,6 +184,8 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// ─── DELETE /api/penangkaran/:id ──────────────────────────────────────────────
+
 export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -194,12 +201,20 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
 
     await db.delete(penangkaran).where(eq(penangkaran.id, Number(id)));
 
-    return res.status(200).json({
-      success: true,
-      message: "Data penangkaran berhasil dihapus",
-    });
+    return res.status(200).json({ success: true, message: "Data penangkaran berhasil dihapus" });
   } catch (error) {
     console.error("Delete penangkaran error:", error);
+    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+  }
+};
+
+// ─── DELETE /api/penangkaran/bulk ─────────────────────────────────────────────
+
+export const bulkDeletePenangkaran = async (req: AuthRequest, res: Response) => {
+  try {
+    return await bulkDeleteHandler(req, res, penangkaran, findPenangkaranById, "penangkaran");
+  } catch (error) {
+    console.error("Bulk delete penangkaran error:", error);
     return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
