@@ -344,6 +344,11 @@ export async function getVerifikasiLog(_req: AuthRequest, res: Response): Promis
 
     res.status(200).json({ data: result });
   } catch (error) {
-    res.status(500).json({ message: "Gagal mengambil log verifikasi" });
+    console.error("ERROR GET VERIFIKASI LOG:", error);
+
+    res.status(500).json({
+      message: "Gagal mengambil log verifikasi",
+      error: error instanceof Error ? error.message : error,
+    });
   }
 }
