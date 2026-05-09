@@ -7,9 +7,6 @@ import { isNotOwner, bulkDeleteHandler } from "../helpers/controller.helpers";
 
 type PenangkaranInsert = InferInsertModel<typeof penangkaran>;
 
-// ─── buildPenangkaranFields ───────────────────────────────────────────────────
-// Menggunakan "key" in body agar field yang tidak dikirim tidak overwrite data lama
-
 const buildPenangkaranFields = (body: Record<string, unknown>) => ({
   ...("namaPenangkaran" in body && { namaPenangkaran: body.namaPenangkaran as string }),
   ...("nomorSk" in body && { nomorSk: (body.nomorSk as string) ?? null }),
@@ -27,11 +24,10 @@ const buildPenangkaranFields = (body: Record<string, unknown>) => ({
   ...("tslId" in body && { tslId: body.tslId ? Number(body.tslId) : null }),
   ...("statusPerlindunganNasional" in body && { statusPerlindunganNasional: (body.statusPerlindunganNasional as PenangkaranInsert["statusPerlindunganNasional"]) ?? null }),
   ...("statusCites" in body && { statusCites: (body.statusCites as PenangkaranInsert["statusCites"]) ?? null }),
+  ...("statusIucn" in body && { statusIucn: (body.statusIucn as PenangkaranInsert["statusIucn"]) ?? null }),
   ...("jantan" in body && { jantan: body.jantan !== null ? Number(body.jantan) : null }),
   ...("betina" in body && { betina: body.betina !== null ? Number(body.betina) : null }),
 });
-
-// ─── withRelations ────────────────────────────────────────────────────────────
 
 const withRelations = {
   bidangWilayah: true,
