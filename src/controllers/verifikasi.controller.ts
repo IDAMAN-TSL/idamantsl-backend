@@ -437,5 +437,11 @@ export async function getVerifikasiLog(
   } catch (error) {
     console.error("getVerifikasiLog error:", error);
     res.status(500).json({ message: "Gagal mengambil log verifikasi" });
+    console.error("ERROR GET VERIFIKASI LOG:", error);
+
+    res.status(500).json({
+      message: "Gagal mengambil log verifikasi",
+      error: error instanceof Error ? error.message : error,
+    });
   }
 }
