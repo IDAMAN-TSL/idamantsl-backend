@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { bulkDeleteHandler } from "../helpers/controller.helpers";
+import { bulkDeleteHandler, isNotOwner } from "../helpers/controller.helpers";
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
 
