@@ -3,6 +3,7 @@ import {
   statusVerifikasiEnum,
   statusCitesEnum,
   statusPerlindunganNasionalEnum,
+  statusIucnEnum,
 } from "../enums/enum";
 import { wilayah } from "./wilayah";
 import { referensiTsl } from "./referensi-tsl";
@@ -36,10 +37,10 @@ export const penangkaran = pgTable("penangkaran", {
 
   // Relasi ke referensi TSL
   tslId: integer("tsl_id").references(() => referensiTsl.id),
-
-  // Status perlindungan & CITES
+  
   statusPerlindunganNasional: statusPerlindunganNasionalEnum("status_perlindungan_nasional"),
   statusCites: statusCitesEnum("status_cites"),
+  statusIucn: statusIucnEnum("status_iucn"),
 
   // Jumlah individu
   jantan: integer("jantan"),
