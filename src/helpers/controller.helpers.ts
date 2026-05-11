@@ -72,3 +72,19 @@ export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
     message: `${numericIds.length} data ${entityName} berhasil dihapus`,
   });
 }
+
+// ─── handleError ──────────────────────────────────────────────────────────────
+
+export const handleError = (
+  res: Response,
+  error: unknown,
+  context: string,
+  customMessage: string = "Terjadi kesalahan server"
+) => {
+  console.error(`[${context}]`, error);
+
+  return res.status(500).json({
+    success: false,
+    message: customMessage,
+  });
+};

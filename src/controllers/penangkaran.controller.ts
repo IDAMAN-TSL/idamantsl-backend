@@ -3,7 +3,7 @@ import { eq, desc, type InferInsertModel } from "drizzle-orm";
 import { db } from "../../db/index";
 import { penangkaran } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { isNotOwner, bulkDeleteHandler } from "../helpers/controller.helpers";
+import { isNotOwner, bulkDeleteHandler, handleError } from "../helpers/controller.helpers";
 import { deleteFile, uploadFile } from "../helpers/azure-storage";
 
 type PenangkaranInsert = InferInsertModel<typeof penangkaran>;
@@ -76,7 +76,7 @@ export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+    return handleError(res, error, "getAllPenangkaran");
   }
 };
 
@@ -104,7 +104,7 @@ export const getPenangkaranById = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+    return handleError(res, error, "getPenangkaranById");
   }
 };
 
@@ -136,7 +136,7 @@ export const createPenangkaran = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+    return handleError(res, error, "createPenangkaran");
   }
 };
 
@@ -185,7 +185,7 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+    return handleError(res, error, "updatePenangkaran");
   }
 };
 
@@ -208,7 +208,7 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({ success: true, message: "Data penangkaran berhasil dihapus" });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+    return handleError(res, error, "deletePenangkaran");
   }
 };
 
@@ -218,6 +218,6 @@ export const bulkDeletePenangkaran = async (req: AuthRequest, res: Response) => 
   try {
     return await bulkDeleteHandler(req, res, penangkaran, findPenangkaranById, "penangkaran");
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+    return handleError(res, error, "bulkDeletePenangkaran");
   }
 };

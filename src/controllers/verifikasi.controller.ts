@@ -7,6 +7,7 @@ import {
   penangkaran,
   users,
 } from "../../db/schema";
+import { handleError } from "../helpers/controller.helpers";
 
 interface AuthUser {
   id: number;
@@ -136,7 +137,7 @@ async function getNamaInputor(createdBy: number | null): Promise<string | null> 
 
 // ─── GET /api/verifikasi/pending ──────────────────────────────────────────────
 
-export async function getDataPending(_req: AuthRequest, res: Response): Promise<void> {
+export async function getDataPending(_req: AuthRequest, res: Response) {
   try {
     const [referensiPending, penangkaranPending] = await Promise.all([
       db.select({
@@ -192,13 +193,13 @@ export async function getDataPending(_req: AuthRequest, res: Response): Promise<
       total: referensiMapped.length + penangkaranMapped.length,
     });
   } catch (error) {
-    res.status(500).json({ message: "Gagal mengambil data pending" });
+    return handleError(res, error, "getDataPending", "Gagal mengambil data pending");
   }
 }
 
 // ─── GET /api/verifikasi/approved ─────────────────────────────────────────────
 
-export async function getDataApproved(_req: AuthRequest, res: Response): Promise<void> {
+export async function getDataApproved(_req: AuthRequest, res: Response) {
   try {
     const [referensiApproved, penangkaranApproved] = await Promise.all([
       db.select({
@@ -227,13 +228,13 @@ export async function getDataApproved(_req: AuthRequest, res: Response): Promise
       total: referensiApproved.length + penangkaranApproved.length,
     });
   } catch (error) {
-    res.status(500).json({ message: "Gagal mengambil data approved" });
+    return handleError(res, error, "getDataApproved", "Gagal mengambil data approved");
   }
 }
 
 // ─── POST /api/verifikasi/approve ─────────────────────────────────────────────
 
-export async function approveData(req: AuthRequest, res: Response): Promise<void> {
+export async function approveData(req: AuthRequest, res: Response) {
   try {
     const user = req.user!;
     const { tabelTarget, targetId, catatan } = req.body;
@@ -282,13 +283,13 @@ export async function approveData(req: AuthRequest, res: Response): Promise<void
 
     res.status(200).json({ message: "Data berhasil disetujui" });
   } catch (error) {
-    res.status(500).json({ message: "Gagal menyetujui data" });
+    return handleError(res, error, "approveData", "Gagal menyetujui data");
   }
 }
 
 // ─── POST /api/verifikasi/tolak ───────────────────────────────────────────────
 
-export async function tolakData(req: AuthRequest, res: Response): Promise<void> {
+export async function tolakData(req: AuthRequest, res: Response) {
   try {
     const user = req.user!;
     const { tabelTarget, targetId, catatan } = req.body;
@@ -329,13 +330,13 @@ export async function tolakData(req: AuthRequest, res: Response): Promise<void> 
 
     res.status(200).json({ message: "Data berhasil ditolak", catatan });
   } catch (error) {
-    res.status(500).json({ message: "Gagal menolak data" });
+    return handleError(res, error, "tolakData", "Gagal menolak data");
   }
 }
 
 // ─── GET /api/verifikasi/log ──────────────────────────────────────────────────
 
-export async function getVerifikasiLog(_req: AuthRequest, res: Response): Promise<void> {
+export async function getVerifikasiLog(_req: AuthRequest, res: Response) {
   try {
     const result = await db
       .select()
@@ -344,11 +345,6 @@ export async function getVerifikasiLog(_req: AuthRequest, res: Response): Promis
 
     res.status(200).json({ data: result });
   } catch (error) {
-    console.error("ERROR GET VERIFIKASI LOG:", error);
-
-    res.status(500).json({
-      message: "Gagal mengambil log verifikasi",
-      error: error instanceof Error ? error.message : error,
-    });
+    return handleError(res, error, "getVerifikasiLog", "Gagal mengambil log verifikasi");
   }
 }

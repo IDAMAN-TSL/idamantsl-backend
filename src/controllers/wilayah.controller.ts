@@ -2,8 +2,9 @@ import { Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { wilayah } from "../../db/schema";
+import { handleError } from "../helpers/controller.helpers";
 
-export async function getAllWilayah(req: Request, res: Response): Promise<void> {
+export async function getAllWilayah(req: Request, res: Response) {
   try {
     const result = await db
       .select()
@@ -11,12 +12,12 @@ export async function getAllWilayah(req: Request, res: Response): Promise<void> 
       .orderBy(wilayah.tipeWilayah, wilayah.nomorWilayah);
 
     res.status(200).json({ data: result });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data wilayah" });
+  } catch (error) {
+    return handleError(res, error, "getAllWilayah", "Gagal mengambil data wilayah");
   }
 }
 
-export async function getWilayahBidang(req: Request, res: Response): Promise<void> {
+export async function getWilayahBidang(req: Request, res: Response) {
   try {
     const result = await db
       .select()
@@ -25,13 +26,13 @@ export async function getWilayahBidang(req: Request, res: Response): Promise<voi
       .orderBy(wilayah.nomorWilayah);
 
     res.status(200).json({ data: result });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data wilayah bidang" });
+  } catch (error) {
+    return handleError(res, error, "getWilayahBidang", "Gagal mengambil data wilayah bidang");
   }
 }
 
 
-export async function getWilayahSeksi(req: Request, res: Response): Promise<void> {
+export async function getWilayahSeksi(req: Request, res: Response) {
   try {
     const result = await db
       .select()
@@ -40,7 +41,7 @@ export async function getWilayahSeksi(req: Request, res: Response): Promise<void
       .orderBy(wilayah.nomorWilayah);
 
     res.status(200).json({ data: result });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data wilayah seksi" });
+  } catch (error) {
+    return handleError(res, error, "getWilayahSeksi", "Gagal mengambil data wilayah seksi");
   }
 }
