@@ -1,7 +1,7 @@
 import { BlobServiceClient } from "@azure/storage-blob";
 import { v4 as uuidv4 } from "uuid";
 
-const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING!;
+const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING || "DefaultEndpointsProtocol=https;AccountName=dummy;AccountKey=dummy;EndpointSuffix=core.windows.net";
 const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME ?? "idamantsl-files";
 
 const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);

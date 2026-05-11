@@ -76,7 +76,6 @@ export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (error) {
-    console.error("Get all penangkaran error:", error);
     return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
@@ -105,7 +104,6 @@ export const getPenangkaranById = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (error) {
-    console.error("Get penangkaran by id error:", error);
     return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
@@ -138,7 +136,6 @@ export const createPenangkaran = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (error) {
-    console.error("Create penangkaran error:", error);
     return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
@@ -159,13 +156,13 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
     }
     let fileSk = existing.fileSk;
     if (req.file) {
-    // Hapus file lama di Azure jika ada
-    if (existing.fileSk) {
-      await deleteFile(existing.fileSk);
+      // Hapus file lama di Azure jika ada
+      if (existing.fileSk) {
+        await deleteFile(existing.fileSk);
+      }
+      // Upload file baru
+      fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
     }
-    // Upload file baru
-    fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
-  }
     const statusVerifikasi = req.user?.role === "admin_pusat" ? existing.statusVerifikasi : "pending";
 
     const [data] = await db
@@ -188,7 +185,6 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (error) {
-    console.error("Update penangkaran error:", error);
     return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
@@ -212,7 +208,6 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({ success: true, message: "Data penangkaran berhasil dihapus" });
   } catch (error) {
-    console.error("Delete penangkaran error:", error);
     return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };
@@ -223,7 +218,6 @@ export const bulkDeletePenangkaran = async (req: AuthRequest, res: Response) => 
   try {
     return await bulkDeleteHandler(req, res, penangkaran, findPenangkaranById, "penangkaran");
   } catch (error) {
-    console.error("Bulk delete penangkaran error:", error);
     return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
   }
 };

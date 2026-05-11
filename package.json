@@ -8,6 +8,9 @@
     "setupFiles": [
       "dotenv/config"
     ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.ts"
+    ],
     "moduleNameMapper": {
       "^uuid$": "<rootDir>/__mocks__/uuid.ts"
     },
