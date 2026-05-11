@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db/index";
 import { users } from "../../db/schema";
 import { randomInt } from "node:crypto";
+import { handleError } from "../helpers/controller.helpers";
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -67,11 +68,7 @@ export const login = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error("Login error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return handleError(res, error, "login");
   }
 };
 
@@ -122,11 +119,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
       devToken: resetToken,
     });
   } catch (error) {
-    console.error("Forgot password error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return handleError(res, error, "forgotPassword");
   }
 };
 
@@ -197,10 +190,6 @@ export const resetPassword = async (req: Request, res: Response) => {
       message: "Password berhasil diubah, silakan login kembali",
     });
   } catch (error) {
-    console.error("Reset password error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return handleError(res, error, "resetPassword");
   }
 };

@@ -3,6 +3,7 @@ import { eq, and, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "../../db";
 import { users, wilayah, referensiTsl, penangkaran, verifikasiLog } from "../../db/schema";
+import { handleError } from "../helpers/controller.helpers";
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ function buildUserFields(body: Request["body"]) {
 
 // ─── GET /api/users ───────────────────────────────────────────────────────────
 
-export async function getAllUsers(req: Request, res: Response): Promise<void> {
+export async function getAllUsers(req: Request, res: Response) {
   try {
     const result = await db
       .select({
@@ -43,14 +44,14 @@ export async function getAllUsers(req: Request, res: Response): Promise<void> {
       .orderBy(users.createdAt);
 
     res.status(200).json({ data: result });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data users" });
+  } catch (error) {
+    return handleError(res, error, "getAllUsers", "Gagal mengambil data users");
   }
 }
 
 // ─── GET /api/users/:id ───────────────────────────────────────────────────────
 
-export async function getUserById(req: Request, res: Response): Promise<void> {
+export async function getUserById(req: Request, res: Response) {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -83,14 +84,14 @@ export async function getUserById(req: Request, res: Response): Promise<void> {
     }
 
     res.status(200).json({ data: result[0] });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data user" });
+  } catch (error) {
+    return handleError(res, error, "getUserById", "Gagal mengambil data user");
   }
 }
 
 // ─── POST /api/users ──────────────────────────────────────────────────────────
 
-export async function createUser(req: Request, res: Response): Promise<void> {
+export async function createUser(req: Request, res: Response) {
   try {
     const { nama, email, role, wilayahId, password, nomorTelepon, alamatKantor } = buildUserFields(req.body);
 
@@ -174,14 +175,14 @@ export async function createUser(req: Request, res: Response): Promise<void> {
       });
 
     res.status(201).json({ message: "User berhasil dibuat", data: newUser });
-  } catch {
-    res.status(500).json({ message: "Gagal membuat user" });
+  } catch (error) {
+    return handleError(res, error, "createUser", "Gagal membuat user");
   }
 }
 
 // ─── PUT /api/users/:id ───────────────────────────────────────────────────────
 
-export async function updateUser(req: Request, res: Response): Promise<void> {
+export async function updateUser(req: Request, res: Response) {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -271,14 +272,14 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
       });
 
     res.status(200).json({ message: "User berhasil diperbarui", data: updated });
-  } catch {
-    res.status(500).json({ message: "Gagal memperbarui user" });
+  } catch (error) {
+    return handleError(res, error, "updateUser", "Gagal memperbarui user");
   }
 }
 
 // ─── DELETE /api/users/:id ────────────────────────────────────────────────────
 
-export async function deleteUser(req: Request, res: Response): Promise<void> {
+export async function deleteUser(req: Request, res: Response) {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -318,13 +319,13 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
     res.status(200).json({ message: "User berhasil dihapus" });
   } catch (error) {
-    res.status(500).json({ message: "Gagal menghapus user" });
+    return handleError(res, error, "deleteUser", "Gagal menghapus user");
   }
 }
 
 // ─── PUT /api/users/:id/reset-password ───────────────────────────────────────
 
-export async function adminResetPassword(req: Request, res: Response): Promise<void> {
+export async function adminResetPassword(req: Request, res: Response) {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -351,7 +352,7 @@ export async function adminResetPassword(req: Request, res: Response): Promise<v
       .where(eq(users.id, id));
 
     res.status(200).json({ message: "Password berhasil direset oleh admin" });
-  } catch {
-    res.status(500).json({ message: "Gagal mereset password" });
+  } catch (error) {
+    return handleError(res, error, "adminResetPassword", "Gagal mereset password");
   }
 }

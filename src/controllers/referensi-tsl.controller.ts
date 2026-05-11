@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { bulkDeleteHandler } from "../helpers/controller.helpers";
+import { bulkDeleteHandler, handleError } from "../helpers/controller.helpers";
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
 
@@ -62,7 +62,7 @@ const SELECT_FIELDS = {
 
 // ─── GET /api/referensi-tsl ───────────────────────────────────────────────────
 
-export async function getAllReferensi(req: AuthRequest, res: Response): Promise<void> {
+export async function getAllReferensi(req: AuthRequest, res: Response) {
   try {
     const { statusVerifikasi } = req.query;
     const validStatus = ["pending", "disetujui", "ditolak"];
@@ -82,14 +82,14 @@ export async function getAllReferensi(req: AuthRequest, res: Response): Promise<
       : await query.orderBy(referensiTsl.createdAt);
 
     res.status(200).json({ data: result });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data referensi TSL" });
+  } catch (error) {
+    return handleError(res, error, "getAllReferensi", "Gagal mengambil data referensi TSL");
   }
 }
 
 // ─── GET /api/referensi-tsl/:id ───────────────────────────────────────────────
 
-export async function getReferensiById(req: AuthRequest, res: Response): Promise<void> {
+export async function getReferensiById(req: AuthRequest, res: Response) {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -110,14 +110,14 @@ export async function getReferensiById(req: AuthRequest, res: Response): Promise
     }
 
     res.status(200).json({ data: result[0] });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data referensi TSL" });
+  } catch (error) {
+    return handleError(res, error, "getReferensiById", "Gagal mengambil data referensi TSL");
   }
 }
 
 // ─── POST /api/referensi-tsl ──────────────────────────────────────────────────
 
-export async function createReferensi(req: AuthRequest, res: Response): Promise<void> {
+export async function createReferensi(req: AuthRequest, res: Response) {
   try {
     const user = req.user!;
     const fields = buildReferensiFields(req.body);
@@ -140,14 +140,14 @@ export async function createReferensi(req: AuthRequest, res: Response): Promise<
       .returning();
 
     res.status(201).json({ message: "Referensi TSL berhasil ditambahkan", data: newData });
-  } catch {
-    res.status(500).json({ message: "Gagal menambahkan referensi TSL" });
+  } catch (error) {
+    return handleError(res, error, "createReferensi", "Gagal menambahkan referensi TSL");
   }
 }
 
 // ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────────
 
-export async function updateReferensi(req: AuthRequest, res: Response): Promise<void> {
+export async function updateReferensi(req: AuthRequest, res: Response) {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -219,14 +219,14 @@ export async function updateReferensi(req: AuthRequest, res: Response): Promise<
       .returning();
 
     res.status(200).json({ message: "Referensi TSL berhasil diperbarui", data: updated });
-  } catch {
-    res.status(500).json({ message: "Gagal memperbarui referensi TSL" });
+  } catch (error) {
+    return handleError(res, error, "updateReferensi", "Gagal memperbarui referensi TSL");
   }
 }
 
 // ─── DELETE /api/referensi-tsl/:id ───────────────────────────────────────────
 
-export async function deleteReferensi(req: AuthRequest, res: Response): Promise<void> {
+export async function deleteReferensi(req: AuthRequest, res: Response) {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -259,8 +259,8 @@ export async function deleteReferensi(req: AuthRequest, res: Response): Promise<
 
     await db.delete(referensiTsl).where(eq(referensiTsl.id, id));
     res.status(200).json({ message: "Referensi TSL berhasil dihapus" });
-  } catch {
-    res.status(500).json({ message: "Gagal menghapus referensi TSL" });
+  } catch (error) {
+    return handleError(res, error, "deleteReferensi", "Gagal menghapus referensi TSL");
   }
 }
 
@@ -270,7 +270,6 @@ export const bulkDeleteReferensi = async (req: AuthRequest, res: Response) => {
   try {
     return await bulkDeleteHandler(req, res, referensiTsl, findReferensiById, "referensi TSL");
   } catch (error) {
-    console.error("Bulk delete referensi TSL error:", error);
-    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+    return handleError(res, error, "bulkDeleteReferensi");
   }
 };

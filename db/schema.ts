@@ -1,5 +1,4 @@
 export * from "./enums/enum";
-
 export * from "./tables/users";
 export * from "./tables/wilayah";
 export * from "./tables/referensi-tsl";
