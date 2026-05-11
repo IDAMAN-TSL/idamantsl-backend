@@ -4,6 +4,7 @@ import { db } from "../../db/index";
 import { penangkaran } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { isNotOwner, bulkDeleteHandler } from "../helpers/controller.helpers";
+import { deleteFile, uploadFile } from "../helpers/azure-storage";
 
 type PenangkaranInsert = InferInsertModel<typeof penangkaran>;
 
@@ -118,12 +119,15 @@ export const createPenangkaran = async (req: AuthRequest, res: Response) => {
     if (!namaPenangkaran) {
       return res.status(400).json({ success: false, message: "Nama penangkaran wajib diisi" });
     }
-
+    let fileSk: string | null = null;
+    if (req.file) {
+      fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+    }
     const statusVerifikasi = req.user?.role === "admin_pusat" ? "disetujui" : "pending";
 
     const [data] = await db
       .insert(penangkaran)
-      .values({ ...buildPenangkaranFields(req.body), statusVerifikasi, createdBy: req.user?.id })
+      .values({ ...buildPenangkaranFields(req.body), fileSk, statusVerifikasi, createdBy: req.user?.id })
       .returning();
 
     return res.status(201).json({
@@ -153,13 +157,22 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
     if (isNotOwner(req.user?.role, existing.createdBy, req.user?.id)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki izin mengubah data ini" });
     }
-
+    let fileSk = existing.fileSk;
+    if (req.file) {
+    // Hapus file lama di Azure jika ada
+    if (existing.fileSk) {
+      await deleteFile(existing.fileSk);
+    }
+    // Upload file baru
+    fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+  }
     const statusVerifikasi = req.user?.role === "admin_pusat" ? existing.statusVerifikasi : "pending";
 
     const [data] = await db
       .update(penangkaran)
       .set({
         ...buildPenangkaranFields(req.body),
+        ...("fileSk" in req.body || req.file ? { fileSk } : {}),
         statusVerifikasi,
         updatedBy: req.user?.id,
         updatedAt: new Date(),
