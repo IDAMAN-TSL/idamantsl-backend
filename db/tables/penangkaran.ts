@@ -1,49 +1,59 @@
 import { pgTable, serial, text, timestamp, integer, json } from "drizzle-orm/pg-core";
-import { statusVerifikasiEnum } from "../enums/enum";
+import {
+  statusVerifikasiEnum,
+  statusCitesEnum,
+  statusPerlindunganNasionalEnum,
+  statusIucnEnum,
+} from "../enums/enum";
 import { wilayah } from "./wilayah";
 import { referensiTsl } from "./referensi-tsl";
 import { users } from "./users";
 
 export const penangkaran = pgTable("penangkaran", {
   id: serial("id").primaryKey(),
-  nomor: text("nomor"),
 
   // Nama unit penangkaran
-  // contoh: "Perum Perhutani Divisi Regional Jawa Barat dan Banten"
   namaPenangkaran: text("nama_penangkaran").notNull(),
 
   // Surat izin
-  nomorSk: text("nomor_sk"),           // contoh: "SK.1010/KSDAE/SET.3/..."
-  tanggalSk: timestamp("tanggal_sk"),  // tanggal terbit SK
-  penerbit: text("penerbit"),          // contoh: "Direjen KSDAE", "BKPM"
+  nomorSk: text("nomor_sk"),
+  tanggalSk: timestamp("tanggal_sk"),
+  fileSk: text("file_sk"),
+  penerbit: text("penerbit"),
   akhirMasaBerlaku: timestamp("akhir_masa_berlaku"),
 
   // Penanggung jawab
   namaDirektur: text("nama_direktur"),
-  nomorTelepon: text("nomor_telepon"), // bisa telepon/fax/HP
+  nomorTelepon: text("nomor_telepon"),
 
   // Relasi wilayah
-  // Bidang Wilayah: I (Bogor), II (Soreang), III (Ciamis)
   bidangWilayahId: integer("bidang_wilayah_id").references(() => wilayah.id),
-  // Seksi Wilayah: I (Serang), II (Bogor), III (Soreang), IV (Purwakarta), V (Garut), VI (Tasikmalaya)
   seksiWilayahId: integer("seksi_wilayah_id").references(() => wilayah.id),
 
   // Lokasi
   alamatKantor: text("alamat_kantor"),
   alamatPenangkaran: text("alamat_penangkaran"),
-  koordinatLokasi: text("koordinat_lokasi"), // disimpan sebagai text karena format bervariasi
+  koordinatLokasi: text("koordinat_lokasi"),
 
   // Relasi ke referensi TSL
   tslId: integer("tsl_id").references(() => referensiTsl.id),
+  
+  statusPerlindunganNasional: statusPerlindunganNasionalEnum("status_perlindungan_nasional"),
+  statusCites: statusCitesEnum("status_cites"),
+  statusIucn: statusIucnEnum("status_iucn"),
 
-  // Status verifikasi oleh Admin Pusat
+  // Jumlah individu
+  jantan: integer("jantan"),
+  betina: integer("betina"),
+
+  // Status verifikasi
   statusVerifikasi: statusVerifikasiEnum("status_verifikasi").default("pending"),
   catatanVerifikasi: text("catatan_verifikasi"),
+  pendingChanges: json("pending_changes"),
 
-  // Siapa yang menginput (Bidang Wilayah atau Admin Pusat)
+  // Audit
   createdBy: integer("created_by").references(() => users.id),
   updatedBy: integer("updated_by").references(() => users.id),
-  pendingChanges: json("pending_changes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

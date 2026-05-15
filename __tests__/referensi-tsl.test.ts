@@ -592,4 +592,133 @@ describe("Referensi TSL Controller", () => {
       expect(res.status).toBe(500);
     });
   });
-});
+
+  // ─── DELETE /api/referensi-tsl/bulk ──────────────────────────────────
+
+  describe("DELETE /api/referensi-tsl/bulk", () => {
+
+    it("200 - admin_pusat berhasil bulk delete", async () => {
+      setUser(mockAdmin);
+      (db.delete as jest.Mock).mockReturnValue({
+        where: jest.fn().mockResolvedValue(undefined),
+      });
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: [1, 2, 3] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("3 data referensi TSL berhasil dihapus");
+    });
+
+    it("400 - bulk delete tanpa ids", async () => {
+      setUser(mockAdmin);
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("ids wajib diisi");
+    });
+
+    it("400 - bulk delete dengan ids bukan array", async () => {
+      setUser(mockAdmin);
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: "not-array" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("400 - bulk delete dengan array kosong", async () => {
+      setUser(mockAdmin);
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: [] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("400 - bulk delete dengan id tidak valid", async () => {
+      setUser(mockAdmin);
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: [1, "invalid", 3] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("Semua id harus berupa angka");
+    });
+
+    it("403 - bidang_wilayah gagal bulk delete jika ada data milik orang lain", async () => {
+      setUser(mockBidang);
+      const mockChain1 = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{ id: 1, createdBy: 5 }]),
+      };
+      const mockChain2 = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{ id: 2, createdBy: 1 }]),
+      };
+      (db.select as jest.Mock)
+        .mockReturnValueOnce(mockChain1)
+        .mockReturnValueOnce(mockChain2);
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: [1, 2] });
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("tidak ditemukan atau bukan milik Anda");
+    });
+
+    it("200 - bidang_wilayah berhasil bulk delete data milik sendiri", async () => {
+      setUser(mockBidang);
+      mockSelect([
+        { id: 1, createdBy: 5 },
+        { id: 2, createdBy: 5 },
+      ]);
+      (db.delete as jest.Mock).mockReturnValue({
+        where: jest.fn().mockResolvedValue(undefined),
+      });
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: [1, 2] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("2 data referensi TSL berhasil dihapus");
+    });
+
+    it("500 - error server saat bulk delete", async () => {
+      setUser(mockAdmin);
+      (db.delete as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: [1, 2] });
+
+      expect(res.status).toBe(500);
+      expect(res.body.success).toBe(false);
+    });
+  });});
