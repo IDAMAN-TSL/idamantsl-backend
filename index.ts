@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import express from "express";
+import cors from "cors";
 import authRoutes from "./src/routes/auth.routes";
 import penangkaranRoutes from "./src/routes/penangkaran.routes";
 import userRoutes from "./src/routes/user.routes";
@@ -15,6 +16,13 @@ const PORT = process.env.PORT;
 app.disable("x-powered-by");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use(cors({
+  origin: "http://localhost:3000",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
