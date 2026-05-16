@@ -45,6 +45,13 @@ jest.mock("jsonwebtoken", () => ({
   },
 }));
 
+jest.mock("../src/helpers/azure-storage", () => ({
+  uploadFile: jest.fn(),
+  deleteFile: jest.fn(),
+}));
+
+import { uploadFile, deleteFile } from "../src/helpers/azure-storage";
+
 import jwt from "jsonwebtoken";
 const mockDb = db as jest.Mocked<typeof db>;
 
@@ -464,6 +471,70 @@ describe("Penangkaran Endpoints", () => {
       expect(res.body.success).toBe(true);
     });
 
+    it("bidang_wilayah update dengan upload file → fileSk masuk pendingChanges", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
+        mockPenangkaran
+      );
+      (uploadFile as jest.Mock).mockResolvedValue("https://azure/file-baru.pdf");
+
+      const setSpy = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([
+            { ...mockPenangkaran, statusVerifikasi: "pending" },
+          ]),
+        }),
+      });
+      (mockDb.update as jest.Mock).mockReturnValue({ set: setSpy });
+
+      const res = await request(app)
+        .put("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockBidangToken}`)
+        .field("namaPenangkaran", "Penangkaran Test")
+        .attach("fileSk", Buffer.from("dummy pdf"), {
+          filename: "sk.pdf",
+          contentType: "application/pdf",
+        });
+
+      expect(res.status).toBe(200);
+      expect(uploadFile).toHaveBeenCalled();
+      // pastikan fileSk ada di pendingChanges yang di-set
+      const setArgs = setSpy.mock.calls[0][0];
+      expect(setArgs.pendingChanges.fileSk).toBe("https://azure/file-baru.pdf");
+      expect(setArgs.pendingChanges.diajukanOleh).toBe(2);
+      expect(setArgs.statusVerifikasi).toBe("pending");
+    });
+
+    it("admin_pusat update dengan file → file lama dihapus & file baru di-upload", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue({
+        ...mockPenangkaran,
+        fileSk: "https://azure/file-lama.pdf",
+      });
+      (uploadFile as jest.Mock).mockResolvedValue("https://azure/file-baru.pdf");
+      (deleteFile as jest.Mock).mockResolvedValue(undefined);
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([mockPenangkaran]),
+          }),
+        }),
+      });
+
+      const res = await request(app)
+        .put("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockAdminToken}`)
+        .field("namaPenangkaran", "Penangkaran Test")
+        .attach("fileSk", Buffer.from("dummy pdf"), {
+          filename: "sk.pdf",
+          contentType: "application/pdf",
+        });
+
+      expect(res.status).toBe(200);
+      expect(deleteFile).toHaveBeenCalledWith("https://azure/file-lama.pdf");
+      expect(uploadFile).toHaveBeenCalled();
+    });
+
     it("gagal saat server error di PUT", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
       (mockDb.query.penangkaran.findFirst as jest.Mock).mockRejectedValue(
@@ -517,7 +588,9 @@ describe("Penangkaran Endpoints", () => {
       );
       (mockDb.update as jest.Mock).mockReturnValue({
         set: jest.fn().mockReturnValue({
-          where: jest.fn().mockResolvedValue(undefined),
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([mockPenangkaran]),
+          }),
         }),
       });
 
@@ -540,14 +613,22 @@ describe("Penangkaran Endpoints", () => {
       expect(res.status).toBe(403);
     });
 
-    it("berhasil hapus data milik sendiri sebagai bidang wilayah", async () => {
+    it("bidang_wilayah hapus data milik sendiri → tetap soft delete (pending)", async () => {
+      // Aturan baru: bidang_wilayah selalu masuk alur pendingChanges,
+      // tidak peduli pemilik atau bukan.
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
       (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue({
         ...mockPenangkaran,
         createdBy: 2,
       });
-      (mockDb.delete as jest.Mock).mockReturnValue({
-        where: jest.fn().mockResolvedValue(undefined),
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([
+              { ...mockPenangkaran, createdBy: 2 },
+            ]),
+          }),
+        }),
       });
 
       const res = await request(app)
@@ -556,6 +637,7 @@ describe("Penangkaran Endpoints", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("Pengajuan penghapusan");
     });
 
     it("gagal hapus tanpa token", async () => {

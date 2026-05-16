@@ -47,6 +47,26 @@ const findPenangkaranById = async (id: number) => {
   });
 };
 
+// ─── markPenangkaranPending ──────────────────────────────────────────────────
+// Helper untuk soft-update/delete oleh bidang_wilayah: simpan pendingChanges
+// dan ubah status menjadi pending.
+
+async function markPenangkaranPending(
+  id: number,
+  pendingChanges: Record<string, unknown>
+) {
+  const [data] = await db
+    .update(penangkaran)
+    .set({
+      pendingChanges,
+      statusVerifikasi: "pending",
+      updatedAt: new Date(),
+    })
+    .where(eq(penangkaran.id, id))
+    .returning();
+  return data;
+}
+
 // ─── GET /api/penangkaran ─────────────────────────────────────────────────────
 
 export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
@@ -169,21 +189,11 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
       }
 
       const fields = buildPenangkaranFields(req.body);
-      const pendingChanges: Record<string, unknown> = {
+      const data = await markPenangkaranPending(Number(id), {
         ...fields,
         ...(fileSk !== undefined ? { fileSk } : {}),
         diajukanOleh: req.user.id,
-      };
-
-      const [data] = await db
-        .update(penangkaran)
-        .set({
-          pendingChanges,
-          statusVerifikasi: "pending",
-          updatedAt: new Date(),
-        })
-        .where(eq(penangkaran.id, Number(id)))
-        .returning();
+      });
 
       return res.status(200).json({
         success: true,
@@ -237,14 +247,10 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
 
     // bidang_wilayah → ajukan penghapusan
     if (req.user?.role === "bidang_wilayah") {
-      await db
-        .update(penangkaran)
-        .set({
-          pendingChanges: { _action: "delete", diajukanOleh: req.user.id },
-          statusVerifikasi: "pending",
-          updatedAt: new Date(),
-        })
-        .where(eq(penangkaran.id, Number(id)));
+      await markPenangkaranPending(Number(id), {
+        _action: "delete",
+        diajukanOleh: req.user.id,
+      });
 
       return res.status(200).json({
         success: true,
