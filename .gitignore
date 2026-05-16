@@ -7,3 +7,5 @@ drizzle/
 .vscode/
 .DS_Store
 Thumbs.db
+.kiro/
+notes/

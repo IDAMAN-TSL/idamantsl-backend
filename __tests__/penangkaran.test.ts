@@ -45,6 +45,13 @@ jest.mock("jsonwebtoken", () => ({
   },
 }));
 
+jest.mock("../src/helpers/azure-storage", () => ({
+  uploadFile: jest.fn(),
+  deleteFile: jest.fn(),
+}));
+
+import { uploadFile, deleteFile } from "../src/helpers/azure-storage";
+
 import jwt from "jsonwebtoken";
 const mockDb = db as jest.Mocked<typeof db>;
 
@@ -401,19 +408,31 @@ describe("Penangkaran Endpoints", () => {
       expect(res.body.success).toBe(false);
     });
 
-    it("gagal update data milik orang lain sebagai bidang wilayah", async () => {
+    it("bidang_wilayah update data milik orang lain → masuk pendingChanges (status pending)", async () => {
+      // Aturan baru: bidang_wilayah boleh ajukan perubahan untuk data manapun.
+      // Hasilnya bukan 403, melainkan 200 dengan status pending.
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
       (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
         mockPenangkaran
       );
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([
+              { ...mockPenangkaran, statusVerifikasi: "pending" },
+            ]),
+          }),
+        }),
+      });
 
       const res = await request(app)
         .put("/api/penangkaran/1")
         .set("Authorization", `Bearer ${mockBidangToken}`)
         .send(mockBodyPenangkaran);
 
-      expect(res.status).toBe(403);
-      expect(res.body.success).toBe(false);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("menunggu persetujuan Admin Pusat");
     });
 
     it("gagal update sebagai seksi wilayah", async () => {
@@ -450,6 +469,70 @@ describe("Penangkaran Endpoints", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
+    });
+
+    it("bidang_wilayah update dengan upload file → fileSk masuk pendingChanges", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
+        mockPenangkaran
+      );
+      (uploadFile as jest.Mock).mockResolvedValue("https://azure/file-baru.pdf");
+
+      const setSpy = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([
+            { ...mockPenangkaran, statusVerifikasi: "pending" },
+          ]),
+        }),
+      });
+      (mockDb.update as jest.Mock).mockReturnValue({ set: setSpy });
+
+      const res = await request(app)
+        .put("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockBidangToken}`)
+        .field("namaPenangkaran", "Penangkaran Test")
+        .attach("fileSk", Buffer.from("dummy pdf"), {
+          filename: "sk.pdf",
+          contentType: "application/pdf",
+        });
+
+      expect(res.status).toBe(200);
+      expect(uploadFile).toHaveBeenCalled();
+      // pastikan fileSk ada di pendingChanges yang di-set
+      const setArgs = setSpy.mock.calls[0][0];
+      expect(setArgs.pendingChanges.fileSk).toBe("https://azure/file-baru.pdf");
+      expect(setArgs.pendingChanges.diajukanOleh).toBe(2);
+      expect(setArgs.statusVerifikasi).toBe("pending");
+    });
+
+    it("admin_pusat update dengan file → file lama dihapus & file baru di-upload", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue({
+        ...mockPenangkaran,
+        fileSk: "https://azure/file-lama.pdf",
+      });
+      (uploadFile as jest.Mock).mockResolvedValue("https://azure/file-baru.pdf");
+      (deleteFile as jest.Mock).mockResolvedValue(undefined);
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([mockPenangkaran]),
+          }),
+        }),
+      });
+
+      const res = await request(app)
+        .put("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockAdminToken}`)
+        .field("namaPenangkaran", "Penangkaran Test")
+        .attach("fileSk", Buffer.from("dummy pdf"), {
+          filename: "sk.pdf",
+          contentType: "application/pdf",
+        });
+
+      expect(res.status).toBe(200);
+      expect(deleteFile).toHaveBeenCalledWith("https://azure/file-lama.pdf");
+      expect(uploadFile).toHaveBeenCalled();
     });
 
     it("gagal saat server error di PUT", async () => {
@@ -497,18 +580,27 @@ describe("Penangkaran Endpoints", () => {
       expect(res.body.success).toBe(false);
     });
 
-    it("gagal hapus data milik orang lain sebagai bidang wilayah", async () => {
+    it("bidang_wilayah hapus data milik orang lain → soft delete (pending)", async () => {
+      // Aturan baru: bidang_wilayah ajukan penghapusan, tidak hard delete.
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
       (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
         mockPenangkaran
       );
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([mockPenangkaran]),
+          }),
+        }),
+      });
 
       const res = await request(app)
         .delete("/api/penangkaran/1")
         .set("Authorization", `Bearer ${mockBidangToken}`);
 
-      expect(res.status).toBe(403);
-      expect(res.body.success).toBe(false);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("Pengajuan penghapusan");
     });
 
     it("gagal hapus sebagai seksi wilayah", async () => {
@@ -521,14 +613,22 @@ describe("Penangkaran Endpoints", () => {
       expect(res.status).toBe(403);
     });
 
-    it("berhasil hapus data milik sendiri sebagai bidang wilayah", async () => {
+    it("bidang_wilayah hapus data milik sendiri → tetap soft delete (pending)", async () => {
+      // Aturan baru: bidang_wilayah selalu masuk alur pendingChanges,
+      // tidak peduli pemilik atau bukan.
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
       (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue({
         ...mockPenangkaran,
         createdBy: 2,
       });
-      (mockDb.delete as jest.Mock).mockReturnValue({
-        where: jest.fn().mockResolvedValue(undefined),
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([
+              { ...mockPenangkaran, createdBy: 2 },
+            ]),
+          }),
+        }),
       });
 
       const res = await request(app)
@@ -537,6 +637,7 @@ describe("Penangkaran Endpoints", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("Pengajuan penghapusan");
     });
 
     it("gagal hapus tanpa token", async () => {
@@ -563,6 +664,10 @@ describe("Penangkaran Endpoints", () => {
   describe("POST /api/penangkaran/bulk", () => {
     it("berhasil bulk delete sebagai admin", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      // bulkDeleteHandler memanggil findById untuk setiap id (existence check)
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue(
+        mockPenangkaran
+      );
       (mockDb.delete as jest.Mock).mockReturnValue({
         where: jest.fn().mockResolvedValue(undefined),
       });
@@ -624,19 +729,27 @@ describe("Penangkaran Endpoints", () => {
       expect(res.body.success).toBe(false);
     });
 
-    it("gagal bulk delete sebagai bidang_wilayah jika ada data milik orang lain", async () => {
+    it("bidang_wilayah bulk delete data manapun → semua jadi pending (soft delete)", async () => {
+      // Aturan baru: bidang_wilayah boleh ajukan penghapusan untuk data manapun.
+      // Backend mengubah status menjadi pending alih-alih hard delete.
       (jwt.verify as jest.Mock).mockReturnValue(mockBidangUser);
       (mockDb.query.penangkaran.findFirst as jest.Mock)
         .mockResolvedValueOnce({ ...mockPenangkaran, createdBy: 2 })
         .mockResolvedValueOnce({ ...mockPenangkaran, createdBy: 1 });
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue(undefined),
+        }),
+      });
 
       const res = await request(app)
         .delete("/api/penangkaran/bulk")
         .set("Authorization", `Bearer ${mockBidangToken}`)
         .send({ ids: [1, 2] });
 
-      expect(res.status).toBe(403);
-      expect(res.body.success).toBe(false);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("pengajuan penghapusan");
     });
 
     it("gagal saat server error di bulk delete", async () => {
@@ -653,4 +766,5 @@ describe("Penangkaran Endpoints", () => {
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
     });
-  });});
+  });
+});

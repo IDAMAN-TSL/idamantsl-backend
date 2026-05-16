@@ -495,6 +495,64 @@ describe("User Controller", () => {
       expect(res.status).toBe(500);
       expect(res.body.message).toBe("Gagal memperbarui user");
     });
+
+    it("400 - password kurang dari 8 karakter saat update", async () => {
+      mockSelectSequential([[mockUser]]);
+
+      const res = await request(app)
+        .put("/api/users/2")
+        .set("Authorization", mockAdminToken)
+        .send({ password: "short" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Password minimal 8 karakter");
+    });
+
+    it("200 - update password baru di-hash dengan bcrypt", async () => {
+      // Verifikasi: password baru di body akan di-hash dan disimpan
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn()
+          .mockResolvedValueOnce([mockUser]) // findUserById
+          .mockResolvedValueOnce([]),         // duplicate email check
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+      (bcrypt.hash as jest.Mock).mockResolvedValue("hashed-new-password");
+      mockUpdate([{ ...mockUser, nama: "Budi Update" }]);
+
+      const res = await request(app)
+        .put("/api/users/2")
+        .set("Authorization", mockAdminToken)
+        .send({
+          email: "budi@bbksda-jabar.id",
+          password: "passwordBaru123",
+        });
+
+      expect(res.status).toBe(200);
+      expect(bcrypt.hash).toHaveBeenCalledWith("passwordBaru123", 10);
+    });
+
+    it("200 - password kosong (string kosong) tidak memicu update password", async () => {
+      // Branch coverage untuk validateOptionalPassword: password === "" → skip
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn()
+          .mockResolvedValueOnce([mockUser])
+          .mockResolvedValueOnce([]),
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+      mockUpdate([{ ...mockUser }]);
+
+      const res = await request(app)
+        .put("/api/users/2")
+        .set("Authorization", mockAdminToken)
+        .send({ email: "budi@bbksda-jabar.id", password: "" });
+
+      expect(res.status).toBe(200);
+      expect(bcrypt.hash).not.toHaveBeenCalled();
+    });
   });
 
   describe("DELETE /api/users/:id", () => {

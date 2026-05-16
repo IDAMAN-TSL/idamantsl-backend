@@ -47,24 +47,48 @@ const findPenangkaranById = async (id: number) => {
   });
 };
 
+// ─── markPenangkaranPending ──────────────────────────────────────────────────
+// Helper untuk soft-update/delete oleh bidang_wilayah: simpan pendingChanges
+// dan ubah status menjadi pending.
+
+async function markPenangkaranPending(
+  id: number,
+  pendingChanges: Record<string, unknown>
+) {
+  const [data] = await db
+    .update(penangkaran)
+    .set({
+      pendingChanges,
+      statusVerifikasi: "pending",
+      updatedAt: new Date(),
+    })
+    .where(eq(penangkaran.id, id))
+    .returning();
+  return data;
+}
+
 // ─── GET /api/penangkaran ─────────────────────────────────────────────────────
 
 export const getAllPenangkaran = async (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.query;
-    const validStatus = ["pending", "disetujui", "ditolak"];
+    const validStatus = ["pending", "disetujui", "ditolak", "all"];
 
     if (status && !validStatus.includes(status as string)) {
       return res.status(400).json({
         success: false,
-        message: "Status tidak valid. Gunakan: pending, disetujui, atau ditolak",
+        message: "Status tidak valid. Gunakan: pending, disetujui, ditolak, atau all",
       });
     }
 
+    // Default: tampilkan hanya data yang sudah disetujui di tabel utama.
+    // Bisa di-override dengan query param: ?status=pending|ditolak|all
+    const statusFilter = (status as string | undefined) ?? "disetujui";
+
     const data = await db.query.penangkaran.findMany({
-      where: status
-        ? eq(penangkaran.statusVerifikasi, status as "pending" | "disetujui" | "ditolak")
-        : undefined,
+      where: statusFilter === "all"
+        ? undefined
+        : eq(penangkaran.statusVerifikasi, statusFilter as "pending" | "disetujui" | "ditolak"),
       orderBy: desc(penangkaran.createdAt),
       with: withRelations,
     });
@@ -154,23 +178,42 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
     if (isNotOwner(req.user?.role, existing.createdBy, req.user?.id)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki izin mengubah data ini" });
     }
+
+    // ── bidang_wilayah → masuk antrean approval (pendingChanges) ──
+    if (req.user?.role === "bidang_wilayah") {
+      // Upload file baru kalau ada (tidak menghapus file lama di sini, karena
+      // kita belum tahu apakah perubahannya akan disetujui).
+      let fileSk: string | null | undefined = undefined;
+      if (req.file) {
+        fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+      }
+
+      const fields = buildPenangkaranFields(req.body);
+      const data = await markPenangkaranPending(Number(id), {
+        ...fields,
+        ...(fileSk !== undefined ? { fileSk } : {}),
+        diajukanOleh: req.user.id,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Perubahan penangkaran telah diajukan, menunggu persetujuan Admin Pusat",
+        data,
+      });
+    }
+
+    // ── admin_pusat → langsung update permanen ──
     let fileSk = existing.fileSk;
     if (req.file) {
-      // Hapus file lama di Azure jika ada
-      if (existing.fileSk) {
-        await deleteFile(existing.fileSk);
-      }
-      // Upload file baru
+      if (existing.fileSk) await deleteFile(existing.fileSk);
       fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
     }
-    const statusVerifikasi = req.user?.role === "admin_pusat" ? existing.statusVerifikasi : "pending";
 
     const [data] = await db
       .update(penangkaran)
       .set({
         ...buildPenangkaranFields(req.body),
         ...("fileSk" in req.body || req.file ? { fileSk } : {}),
-        statusVerifikasi,
         updatedBy: req.user?.id,
         updatedAt: new Date(),
       })
@@ -179,9 +222,7 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: statusVerifikasi === "pending"
-        ? "Data penangkaran berhasil diubah, menunggu verifikasi Admin Pusat"
-        : "Data penangkaran berhasil diubah",
+      message: "Data penangkaran berhasil diubah",
       data,
     });
   } catch (error) {
@@ -204,6 +245,20 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki izin menghapus data ini" });
     }
 
+    // bidang_wilayah → ajukan penghapusan
+    if (req.user?.role === "bidang_wilayah") {
+      await markPenangkaranPending(Number(id), {
+        _action: "delete",
+        diajukanOleh: req.user.id,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Pengajuan penghapusan dikirim, menunggu persetujuan Admin Pusat",
+      });
+    }
+
+    // admin_pusat / pemilik → hard delete
     await db.delete(penangkaran).where(eq(penangkaran.id, Number(id)));
 
     return res.status(200).json({ success: true, message: "Data penangkaran berhasil dihapus" });

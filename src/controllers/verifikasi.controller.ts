@@ -33,8 +33,6 @@ type TableDef = {
   delete: (id: number) => Promise<void>;
 };
 
-// ─── Table Registry ───────────────────────────────────────────────────────────
-
 const TABLE_REGISTRY: Partial<Record<TabelTarget, TableDef>> = {
   referensi_tsl: {
     find: async (id) =>
@@ -62,26 +60,42 @@ function getTableDef(tabel: TabelTarget): TableDef {
   return def;
 }
 
-// ─── Helper: Tentukan jenis pengajuan ────────────────────────────────────────
-
 function getJenisPengajuan(
   pendingChanges: Record<string, unknown> | null
 ): JenisPengajuan {
   if (pendingChanges?._action === "delete") return "hapus";
   if (pendingChanges && Object.keys(pendingChanges).length > 0) return "perbarui";
-  // pendingChanges null = data baru yang belum disetujui (tambah)
   return "tambah";
 }
 
-// ─── Helper: Insert log verifikasi ───────────────────────────────────────────
+// Ambil ID user yang mengajukan perubahan.
+// Prioritas: pendingChanges.diajukanOleh > record.createdBy
+function getDiajukanOleh(
+  pendingChanges: Record<string, unknown> | null,
+  fallbackCreatedBy: number | null
+): number | null {
+  const diajukan = pendingChanges?.diajukanOleh;
+  if (typeof diajukan === "number") return diajukan;
+  return fallbackCreatedBy;
+}
+
+// Bersihkan pendingChanges dari metadata internal sebelum diaplikasikan
+// ke tabel target. Tabel target tidak punya kolom `_action` / `diajukanOleh`.
+function sanitizePendingChanges(
+  pendingChanges: Record<string, unknown> | null
+): Record<string, unknown> {
+  if (!pendingChanges) return {};
+  const { _action: _drop1, diajukanOleh: _drop2, ...clean } = pendingChanges;
+  return clean;
+}
 
 async function insertVerifikasiLog(
   tabelTarget: TabelTarget,
   targetId: number,
   status: "disetujui" | "ditolak" | "pending",
   jenisPengajuan: JenisPengajuan,
-  createdBy: number | null,
-  verifikasiOleh: number,
+  diajukanOleh: number | null,  // ← ID bidang_wilayah yang mengajukan
+  verifikasiOleh: number,        // ← ID admin_pusat yang memverifikasi
   catatan?: string | null
 ) {
   await db.insert(verifikasiLog).values({
@@ -89,7 +103,7 @@ async function insertVerifikasiLog(
     targetId,
     status,
     jenisPengajuan,
-    createdBy,
+    createdBy: diajukanOleh,   // ← kolom di DB tetap createdBy, nilainya dari record.createdBy
     verifikasiOleh,
     catatan: catatan ?? null,
   });
@@ -124,6 +138,7 @@ async function findPendingRecord(
 }
 
 // ─── Helper: Ambil nama inputor dari users ────────────────────────────────────
+// DEPRECATED: Tidak digunakan lagi, diganti dengan userMap di getDataPending
 
 async function getNamaInputor(createdBy: number | null): Promise<string | null> {
   if (!createdBy) return null;
@@ -161,27 +176,35 @@ export async function getDataPending(_req: AuthRequest, res: Response) {
     ]);
 
     // Ambil semua user sekaligus untuk mapping nama inputor
+    // userMap berisi { id: nama } dari tabel users
+    // Nama user bidang_wilayah sudah sesuai: "Bidang KSDA I Bogor", dll
     const allUsers = await db.select({ id: users.id, nama: users.nama }).from(users);
     const userMap: Record<number, string> = {};
     allUsers.forEach(u => { userMap[u.id] = u.nama; });
 
     const referensiMapped = referensiPending.map((r) => {
       const pendingChanges = r.pendingChanges as Record<string, unknown> | null;
+      // Prioritaskan diajukanOleh di pendingChanges (kasus bidang_wilayah ngedit
+      // data milik admin_pusat). Fallback ke createdBy.
+      const inputorId = getDiajukanOleh(pendingChanges, r.createdBy);
+      const namaInputor = inputorId ? userMap[inputorId] ?? null : null;
       return {
         ...r,
-        tabelTarget: "referensi_tsl",
+        tabelTarget: "referensi_tsl" as const,
         jenisPengajuan: getJenisPengajuan(pendingChanges),
-        namaInputor: r.createdBy ? (userMap[r.createdBy] ?? null) : null,
+        namaInputor,
       };
     });
 
     const penangkaranMapped = penangkaranPending.map((p) => {
       const pendingChanges = p.pendingChanges as Record<string, unknown> | null;
+      const inputorId = getDiajukanOleh(pendingChanges, p.createdBy);
+      const namaInputor = inputorId ? userMap[inputorId] ?? null : null;
       return {
         ...p,
-        tabelTarget: "penangkaran",
+        tabelTarget: "penangkaran" as const,
         jenisPengajuan: getJenisPengajuan(pendingChanges),
-        namaInputor: p.createdBy ? (userMap[p.createdBy] ?? null) : null,
+        namaInputor,
       };
     });
 
@@ -222,8 +245,8 @@ export async function getDataApproved(_req: AuthRequest, res: Response) {
 
     res.status(200).json({
       data: {
-        referensi_tsl: referensiApproved.map(r => ({ ...r, tabelTarget: "referensi_tsl" })),
-        penangkaran: penangkaranApproved.map(p => ({ ...p, tabelTarget: "penangkaran" })),
+        referensi_tsl: referensiApproved.map(r => ({ ...r, tabelTarget: "referensi_tsl" as const })),
+        penangkaran: penangkaranApproved.map(p => ({ ...p, tabelTarget: "penangkaran" as const })),
       },
       total: referensiApproved.length + penangkaranApproved.length,
     });
@@ -256,13 +279,18 @@ export async function approveData(req: AuthRequest, res: Response) {
     const pendingChanges = record.pendingChanges as Record<string, unknown> | null;
     const isDeleteRequest = pendingChanges?._action === "delete";
     const jenisPengajuan = getJenisPengajuan(pendingChanges);
-    const diajukanOleh = (record.createdBy as number | null) ?? null;
+
+    const diajukanOleh = getDiajukanOleh(pendingChanges, (record.createdBy as number | null) ?? null);
 
     if (isDeleteRequest) {
       await tableDef.delete(Number(targetId));
       await insertVerifikasiLog(
-        tabelTarget, Number(targetId), "disetujui",
-        jenisPengajuan, diajukanOleh, user.id,
+        tabelTarget,
+        Number(targetId),
+        "disetujui",
+        jenisPengajuan,
+        diajukanOleh,  // ← ID bidang_wilayah
+        user.id,        // ← ID admin_pusat yang approve
         catatan ?? "Pengajuan penghapusan disetujui"
       );
       res.status(200).json({ message: "Pengajuan penghapusan disetujui, data telah dihapus" });
@@ -270,15 +298,20 @@ export async function approveData(req: AuthRequest, res: Response) {
     }
 
     await tableDef.update(Number(targetId), {
-      ...(pendingChanges ?? {}),
+      ...sanitizePendingChanges(pendingChanges),
       pendingChanges: null,
       statusVerifikasi: "disetujui",
       updatedAt: new Date(),
     });
 
     await insertVerifikasiLog(
-      tabelTarget, Number(targetId), "disetujui",
-      jenisPengajuan, diajukanOleh, user.id, catatan
+      tabelTarget,
+      Number(targetId),
+      "disetujui",
+      jenisPengajuan,
+      diajukanOleh,  // ← ID bidang_wilayah
+      user.id,        // ← ID admin_pusat yang approve
+      catatan
     );
 
     res.status(200).json({ message: "Data berhasil disetujui" });
@@ -314,7 +347,10 @@ export async function tolakData(req: AuthRequest, res: Response) {
     const { record } = result;
     const pendingChanges = record.pendingChanges as Record<string, unknown> | null;
     const jenisPengajuan = getJenisPengajuan(pendingChanges);
-    const diajukanOleh = (record.createdBy as number | null) ?? null;
+
+    // Prioritaskan diajukanOleh dari pendingChanges (bidang_wilayah yang ngedit
+    // data milik admin_pusat). Fallback: createdBy.
+    const diajukanOleh = getDiajukanOleh(pendingChanges, (record.createdBy as number | null) ?? null);
 
     await getTableDef(tabelTarget).update(Number(targetId), {
       statusVerifikasi: "ditolak",
@@ -324,8 +360,13 @@ export async function tolakData(req: AuthRequest, res: Response) {
     });
 
     await insertVerifikasiLog(
-      tabelTarget, Number(targetId), "ditolak",
-      jenisPengajuan, diajukanOleh, user.id, catatan
+      tabelTarget,
+      Number(targetId),
+      "ditolak",
+      jenisPengajuan,
+      diajukanOleh,  // ← ID bidang_wilayah
+      user.id,        // ← ID admin_pusat yang tolak
+      catatan
     );
 
     res.status(200).json({ message: "Data berhasil ditolak", catatan });

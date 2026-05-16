@@ -17,9 +17,9 @@ jest.mock("jsonwebtoken", () => ({
   sign: jest.fn(),
 }));
 
-const mockAdmin  = { id: 1, role: "admin_pusat" };
+const mockAdmin = { id: 1, role: "admin_pusat" };
 const mockBidang = { id: 5, role: "bidang_wilayah" };
-const mockSeksi  = { id: 6, role: "seksi_wilayah" };
+const mockSeksi = { id: 6, role: "seksi_wilayah" };
 
 const mockReferensi = {
   id: 1,
@@ -162,7 +162,7 @@ describe("Referensi TSL Controller", () => {
         .set("Authorization", TOKEN);
 
       expect(res.status).toBe(400);
-      expect(res.body.message).toBe("statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak");
+      expect(res.body.message).toBe("statusVerifikasi tidak valid. Gunakan: pending, disetujui, ditolak, atau all");
     });
 
     it("500 - error server", async () => {
@@ -599,6 +599,8 @@ describe("Referensi TSL Controller", () => {
 
     it("200 - admin_pusat berhasil bulk delete", async () => {
       setUser(mockAdmin);
+      // bulkDeleteHandler memanggil findById untuk setiap id (existence check)
+      mockSelect([{ id: 1, createdBy: 1 }]);
       (db.delete as jest.Mock).mockReturnValue({
         where: jest.fn().mockResolvedValue(undefined),
       });
@@ -663,7 +665,10 @@ describe("Referensi TSL Controller", () => {
       expect(res.body.message).toContain("Semua id harus berupa angka");
     });
 
-    it("403 - bidang_wilayah gagal bulk delete jika ada data milik orang lain", async () => {
+    it("200 - bidang_wilayah bulk delete data manapun → semua jadi pending (soft delete)", async () => {
+      // Aturan baru: bidang_wilayah boleh ajukan penghapusan untuk data manapun.
+      // Backend mengubah status semua data terpilih menjadi pending dengan
+      // pendingChanges = { _action: "delete", diajukanOleh: <id> }.
       setUser(mockBidang);
       const mockChain1 = {
         from: jest.fn().mockReturnThis(),
@@ -678,25 +683,10 @@ describe("Referensi TSL Controller", () => {
       (db.select as jest.Mock)
         .mockReturnValueOnce(mockChain1)
         .mockReturnValueOnce(mockChain2);
-
-      const res = await request(app)
-        .delete("/api/referensi-tsl/bulk")
-        .set("Authorization", TOKEN)
-        .send({ ids: [1, 2] });
-
-      expect(res.status).toBe(403);
-      expect(res.body.success).toBe(false);
-      expect(res.body.message).toContain("tidak ditemukan atau bukan milik Anda");
-    });
-
-    it("200 - bidang_wilayah berhasil bulk delete data milik sendiri", async () => {
-      setUser(mockBidang);
-      mockSelect([
-        { id: 1, createdBy: 5 },
-        { id: 2, createdBy: 5 },
-      ]);
-      (db.delete as jest.Mock).mockReturnValue({
-        where: jest.fn().mockResolvedValue(undefined),
+      (db.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue(undefined),
+        }),
       });
 
       const res = await request(app)
@@ -706,7 +696,29 @@ describe("Referensi TSL Controller", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.message).toContain("2 data referensi TSL berhasil dihapus");
+      expect(res.body.message).toContain("pengajuan penghapusan");
+    });
+
+    it("200 - bidang_wilayah berhasil bulk delete data milik sendiri → jadi pending", async () => {
+      setUser(mockBidang);
+      mockSelect([
+        { id: 1, createdBy: 5 },
+        { id: 2, createdBy: 5 },
+      ]);
+      (db.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue(undefined),
+        }),
+      });
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: [1, 2] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("2 pengajuan penghapusan referensi TSL");
     });
 
     it("500 - error server saat bulk delete", async () => {
@@ -721,4 +733,5 @@ describe("Referensi TSL Controller", () => {
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
     });
-  });});
+  });
+});
