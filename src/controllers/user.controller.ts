@@ -196,12 +196,19 @@ export async function updateUser(req: Request, res: Response) {
       return;
     }
 
-    const { nama, email, role, wilayahId, nomorTelepon, alamatKantor } = buildUserFields(req.body);
+    const { nama, email, role, wilayahId, password, nomorTelepon, alamatKantor } = buildUserFields(req.body);
 
     if (role) {
       const validRoles = ["admin_pusat", "bidang_wilayah", "seksi_wilayah"];
       if (!validRoles.includes(role)) {
         res.status(400).json({ message: "Role tidak valid" });
+        return;
+      }
+    }
+
+    if (password !== undefined && password !== null && password !== "") {
+      if (typeof password !== "string" || password.length < 8) {
+        res.status(400).json({ message: "Password minimal 8 karakter" });
         return;
       }
     }
@@ -255,6 +262,11 @@ export async function updateUser(req: Request, res: Response) {
     if (wilayahId !== undefined) updateData.wilayahId = wilayahId;
     if (nomorTelepon !== undefined) updateData.nomorTelepon = nomorTelepon;
     if (alamatKantor !== undefined) updateData.alamatKantor = alamatKantor;
+
+    // Password optional saat update. Hanya di-hash dan di-set kalau diisi.
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
 
     const [updated] = await db
       .update(users)

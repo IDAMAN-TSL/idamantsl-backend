@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import express from "express";
+import cors from "cors";
 import authRoutes from "./src/routes/auth.routes";
 import penangkaranRoutes from "./src/routes/penangkaran.routes";
 import userRoutes from "./src/routes/user.routes";
@@ -14,6 +15,12 @@ const app = express();
 const PORT = process.env.PORT;
 
 app.disable("x-powered-by");
+app.use(
+  cors({
+    origin: true, // izinkan semua origin saat dev (localhost & IP network)
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
