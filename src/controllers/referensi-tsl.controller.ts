@@ -253,7 +253,7 @@ export async function updateReferensi(
       const [updated] = await db
         .update(referensiTsl)
         .set({
-          pendingChanges: fields,
+          pendingChanges: { ...fields, diajukanOleh: user.id },
           statusVerifikasi: "pending",
           createdBy: existing.createdBy ?? user.id,
           updatedAt: new Date(),
@@ -352,7 +352,7 @@ export async function deleteReferensi(
       await db
         .update(referensiTsl)
         .set({
-          pendingChanges: { _action: "delete" },
+          pendingChanges: { _action: "delete", diajukanOleh: user.id },
           statusVerifikasi: "pending",
           createdBy: existing.createdBy ?? user.id,
           updatedAt: new Date(),

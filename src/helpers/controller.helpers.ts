@@ -19,7 +19,8 @@ export const isNotOwner = (
   createdBy: number | null,
   userId: number | undefined
 ): boolean => {
-  return role === "bidang_wilayah" && createdBy !== userId;
+  // Semua role bidang_wilayah diizinkan mengubah/menghapus, namun akan masuk status pending
+  return false;
 };
 
 // ─── bulkDeleteHandler ────────────────────────────────────────────────────────
@@ -52,20 +53,32 @@ export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
     });
   }
 
-  // Cek ownership jika bidang_wilayah
+  // Cek ownership jika bidang_wilayah (Dihapus: bidang_wilayah kini bisa hapus dengan status pending)
   if (req.user?.role === "bidang_wilayah") {
+    // Validasi apakah ada data yang sedang pending
     const dataList = await Promise.all(numericIds.map((id) => findById(id)));
-    const notOwned = dataList.some((d) => !d || d.createdBy !== req.user?.id);
-
-    if (notOwned) {
+    const hasPending = dataList.some((d: any) => d && d.statusVerifikasi === "pending");
+    
+    if (hasPending) {
       return res.status(403).json({
         success: false,
-        message: "Beberapa data tidak ditemukan atau bukan milik Anda",
+        message: "Beberapa data sedang menunggu persetujuan admin, tidak bisa dihapus",
       });
     }
+
+    await db.update(table as any).set({
+      pendingChanges: { _action: "delete", diajukanOleh: req.user.id },
+      statusVerifikasi: "pending",
+      updatedAt: new Date(),
+    }).where(inArray(table.id, numericIds));
+
+    return res.status(200).json({
+      success: true,
+      message: `Pengajuan penghapusan ${numericIds.length} data ${entityName} telah dikirim, menunggu persetujuan admin`,
+    });
   }
 
-  await db.delete(table as never).where(inArray(table.id, numericIds));
+  await db.delete(table as any).where(inArray(table.id, numericIds));
 
   return res.status(200).json({
     success: true,

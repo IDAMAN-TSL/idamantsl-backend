@@ -201,21 +201,25 @@ export async function getDataPending(
 
     const referensiMapped = referensiPending.map((r) => {
       const pendingChanges = r.pendingChanges as Record<string, unknown> | null;
+      const diajukanOleh = (pendingChanges?.diajukanOleh as number) || r.createdBy;
       return {
         ...r,
         tabelTarget: "referensi_tsl",
         jenisPengajuan: getJenisPengajuan(pendingChanges),
-        namaInputor: r.createdBy ? (userMap[r.createdBy] ?? null) : null,
+        namaInputor: diajukanOleh ? (userMap[diajukanOleh] ?? null) : null,
+        createdBy: diajukanOleh, // override untuk konsistensi view
       };
     });
 
     const penangkaranMapped = penangkaranPending.map((p) => {
       const pendingChanges = p.pendingChanges as Record<string, unknown> | null;
+      const diajukanOleh = (pendingChanges?.diajukanOleh as number) || p.createdBy;
       return {
         ...p,
         tabelTarget: "penangkaran",
         jenisPengajuan: getJenisPengajuan(pendingChanges),
-        namaInputor: p.createdBy ? (userMap[p.createdBy] ?? null) : null,
+        namaInputor: diajukanOleh ? (userMap[diajukanOleh] ?? null) : null,
+        createdBy: diajukanOleh, // override untuk konsistensi view
       };
     });
 
@@ -313,7 +317,7 @@ export async function approveData(
     > | null;
     const isDeleteRequest = pendingChanges?._action === "delete";
     const jenisPengajuan = getJenisPengajuan(pendingChanges);
-    const diajukanOleh = (record.createdBy as number | null) ?? null;
+    const diajukanOleh = (pendingChanges?.diajukanOleh as number) || ((record.createdBy as number | null) ?? null);
 
     if (isDeleteRequest) {
       await tableDef.delete(Number(targetId));
@@ -391,7 +395,7 @@ export async function tolakData(
       unknown
     > | null;
     const jenisPengajuan = getJenisPengajuan(pendingChanges);
-    const diajukanOleh = (record.createdBy as number | null) ?? null;
+    const diajukanOleh = (pendingChanges?.diajukanOleh as number) || ((record.createdBy as number | null) ?? null);
 
     // Catatan: pendingChanges SENGAJA tidak di-null-kan saat penolakan.
     // Hal ini memungkinkan frontend non-admin membaca jenis pengajuan

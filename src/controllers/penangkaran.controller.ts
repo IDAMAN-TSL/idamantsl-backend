@@ -154,13 +154,45 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki izin mengubah data ini" });
     }
 
-    const statusVerifikasi = req.user?.role === "admin_pusat" ? existing.statusVerifikasi : "pending";
+    if (req.user?.role === "bidang_wilayah") {
+      if (existing.statusVerifikasi === "pending") {
+        return res.status(403).json({
+          success: false,
+          message: "Data sedang menunggu persetujuan admin, tidak bisa diubah",
+        });
+      }
+      if (existing.statusVerifikasi === "ditolak") {
+        return res.status(403).json({
+          success: false,
+          message: "Data ditolak oleh admin",
+          catatanVerifikasi: existing.catatanVerifikasi,
+        });
+      }
+
+      const fields = buildPenangkaranFields(req.body);
+      
+      const [data] = await db
+        .update(penangkaran)
+        .set({
+          pendingChanges: { ...fields, diajukanOleh: req.user.id },
+          statusVerifikasi: "pending",
+          updatedBy: req.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(penangkaran.id, Number(id)))
+        .returning();
+
+      return res.status(200).json({
+        success: true,
+        message: "Perubahan telah diajukan, menunggu persetujuan admin",
+        data,
+      });
+    }
 
     const [data] = await db
       .update(penangkaran)
       .set({
         ...buildPenangkaranFields(req.body),
-        statusVerifikasi,
         updatedBy: req.user?.id,
         updatedAt: new Date(),
       })
@@ -169,9 +201,7 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: statusVerifikasi === "pending"
-        ? "Data penangkaran berhasil diubah, menunggu verifikasi Admin Pusat"
-        : "Data penangkaran berhasil diubah",
+      message: "Data penangkaran berhasil diubah",
       data,
     });
   } catch (error) {
@@ -193,6 +223,37 @@ export const deletePenangkaran = async (req: AuthRequest, res: Response) => {
 
     if (isNotOwner(req.user?.role, existing.createdBy, req.user?.id)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki izin menghapus data ini" });
+    }
+
+    if (req.user?.role === "bidang_wilayah") {
+      if (existing.statusVerifikasi === "pending") {
+        return res.status(403).json({
+          success: false,
+          message: "Data sedang menunggu persetujuan admin, tidak bisa dihapus",
+        });
+      }
+      if (existing.statusVerifikasi === "ditolak") {
+        return res.status(403).json({
+          success: false,
+          message: "Data ditolak oleh admin",
+          catatanVerifikasi: existing.catatanVerifikasi,
+        });
+      }
+
+      await db
+        .update(penangkaran)
+        .set({
+          pendingChanges: { _action: "delete", diajukanOleh: req.user.id },
+          statusVerifikasi: "pending",
+          updatedBy: req.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(penangkaran.id, Number(id)));
+
+      return res.status(200).json({
+        success: true,
+        message: "Pengajuan penghapusan telah dikirim, menunggu persetujuan admin",
+      });
     }
 
     await db.delete(penangkaran).where(eq(penangkaran.id, Number(id)));

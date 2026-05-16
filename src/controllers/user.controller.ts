@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { eq, and, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "../../db";
-import { users, wilayah, referensiTsl, penangkaran, verifikasiLog } from "../../db/schema";
+import { users, wilayah, referensiTsl, penangkaran, lembagaKonservasi, pengedaranDalamNegeri, pengedaranLuarNegeri, verifikasiLog } from "../../db/schema";
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -195,7 +195,7 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const { nama, email, role, wilayahId, nomorTelepon, alamatKantor } = buildUserFields(req.body);
+    const { nama, email, role, wilayahId, nomorTelepon, alamatKantor, password } = buildUserFields(req.body);
 
     if (role) {
       const validRoles = ["admin_pusat", "bidang_wilayah", "seksi_wilayah"];
@@ -254,6 +254,9 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
     if (wilayahId !== undefined) updateData.wilayahId = wilayahId;
     if (nomorTelepon !== undefined) updateData.nomorTelepon = nomorTelepon;
     if (alamatKantor !== undefined) updateData.alamatKantor = alamatKantor;
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
 
     const [updated] = await db
       .update(users)
@@ -312,13 +315,19 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
       .where(eq(penangkaran.updatedBy, id));
 
     await db.update(verifikasiLog)
+      .set({ createdBy: null })
+      .where(eq(verifikasiLog.createdBy, id));
+
+    await db.update(verifikasiLog)
       .set({ verifikasiOleh: null })
       .where(eq(verifikasiLog.verifikasiOleh, id));
 
     await db.delete(users).where(eq(users.id, id));
     res.status(200).json({ message: "User berhasil dihapus" });
   } catch (error) {
-    res.status(500).json({ message: "Gagal menghapus user" });
+    console.error("Error deleting user:", error);
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    res.status(500).json({ message: `Gagal menghapus user: ${detail}` });
   }
 }
 
