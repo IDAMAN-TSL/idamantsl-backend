@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { bulkDeleteHandler, handleError } from "../helpers/controller.helpers";
+import { bulkDeleteHandler, isNotOwner } from "../helpers/controller.helpers";
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
 
@@ -22,15 +22,37 @@ async function findReferensiById(id: number) {
 
 function buildReferensiFields(body: Request["body"]) {
   const {
-    nomor, namaDaerah, jenis, kingdom, divisi, kelas, ordo,
-    famili, genus, spesies, statusPerlindunganNasional,
-    statusCites, statusIucn, catatanVerifikasi,
+    nomor,
+    namaDaerah,
+    jenis,
+    kingdom,
+    divisi,
+    kelas,
+    ordo,
+    famili,
+    genus,
+    spesies,
+    statusPerlindunganNasional,
+    statusCites,
+    statusIucn,
+    catatanVerifikasi,
   } = body;
 
   return {
-    nomor, namaDaerah, jenis, kingdom, divisi, kelas, ordo,
-    famili, genus, spesies, statusPerlindunganNasional,
-    statusCites, statusIucn, catatanVerifikasi,
+    nomor,
+    namaDaerah,
+    jenis,
+    kingdom,
+    divisi,
+    kelas,
+    ordo,
+    famili,
+    genus,
+    spesies,
+    statusPerlindunganNasional,
+    statusCites,
+    statusIucn,
+    catatanVerifikasi,
   };
 }
 
@@ -53,6 +75,8 @@ const SELECT_FIELDS = {
   statusIucn: referensiTsl.statusIucn,
   statusVerifikasi: referensiTsl.statusVerifikasi,
   catatanVerifikasi: referensiTsl.catatanVerifikasi,
+  // Diperlukan oleh frontend non-admin untuk mendeteksi jenis pengajuan
+  // (Tambah / Perbarui / Hapus) tanpa akses ke /api/verifikasi/*
   pendingChanges: referensiTsl.pendingChanges,
   createdBy: referensiTsl.createdBy,
   namaInputor: users.nama,
@@ -62,13 +86,23 @@ const SELECT_FIELDS = {
 
 // ─── GET /api/referensi-tsl ───────────────────────────────────────────────────
 
-export async function getAllReferensi(req: AuthRequest, res: Response) {
+// ─── GET /api/referensi-tsl ───────────────────────────────────────────────────
+
+export async function getAllReferensi(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const { statusVerifikasi } = req.query;
     const validStatus = ["pending", "disetujui", "ditolak"];
 
     if (statusVerifikasi && !validStatus.includes(statusVerifikasi as string)) {
-      res.status(400).json({ message: "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak" });
+      res
+        .status(400)
+        .json({
+          message:
+            "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak",
+        });
       return;
     }
 
@@ -78,7 +112,14 @@ export async function getAllReferensi(req: AuthRequest, res: Response) {
       .leftJoin(users, eq(referensiTsl.createdBy, users.id));
 
     const result = statusVerifikasi
-      ? await query.where(eq(referensiTsl.statusVerifikasi, statusVerifikasi as "pending" | "disetujui" | "ditolak")).orderBy(referensiTsl.createdAt)
+      ? await query
+          .where(
+            eq(
+              referensiTsl.statusVerifikasi,
+              statusVerifikasi as "pending" | "disetujui" | "ditolak",
+            ),
+          )
+          .orderBy(referensiTsl.createdAt)
       : await query.orderBy(referensiTsl.createdAt);
 
     res.status(200).json({ data: result });
@@ -89,7 +130,12 @@ export async function getAllReferensi(req: AuthRequest, res: Response) {
 
 // ─── GET /api/referensi-tsl/:id ───────────────────────────────────────────────
 
-export async function getReferensiById(req: AuthRequest, res: Response) {
+// ─── GET /api/referensi-tsl/:id ───────────────────────────────────────────────
+
+export async function getReferensiById(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -117,7 +163,12 @@ export async function getReferensiById(req: AuthRequest, res: Response) {
 
 // ─── POST /api/referensi-tsl ──────────────────────────────────────────────────
 
-export async function createReferensi(req: AuthRequest, res: Response) {
+// ─── POST /api/referensi-tsl ──────────────────────────────────────────────────
+
+export async function createReferensi(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const user = req.user!;
     const fields = buildReferensiFields(req.body);
@@ -132,22 +183,30 @@ export async function createReferensi(req: AuthRequest, res: Response) {
       return;
     }
 
-    const statusVerifikasi = user.role === "admin_pusat" ? "disetujui" : "pending";
+    const statusVerifikasi =
+      user.role === "admin_pusat" ? "disetujui" : "pending";
 
     const [newData] = await db
       .insert(referensiTsl)
       .values({ ...fields, statusVerifikasi, createdBy: user.id })
       .returning();
 
-    res.status(201).json({ message: "Referensi TSL berhasil ditambahkan", data: newData });
-  } catch (error) {
-    return handleError(res, error, "createReferensi", "Gagal menambahkan referensi TSL");
+    res
+      .status(201)
+      .json({ message: "Referensi TSL berhasil ditambahkan", data: newData });
+  } catch {
+    res.status(500).json({ message: "Gagal menambahkan referensi TSL" });
   }
 }
 
 // ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────────
 
-export async function updateReferensi(req: AuthRequest, res: Response) {
+// ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────────
+
+export async function updateReferensi(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -163,7 +222,28 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
       return;
     }
 
+    if (isNotOwner(user.role, existing.createdBy, user.id)) {
+      res
+        .status(403)
+        .json({ message: "Tidak memiliki akses untuk mengubah data ini" });
+      return;
+    }
+
     if (user.role === "bidang_wilayah") {
+      if (existing.statusVerifikasi === "pending") {
+        res.status(403).json({
+          message: "Data sedang menunggu persetujuan admin, tidak bisa diubah",
+        });
+        return;
+      }
+      if (existing.statusVerifikasi === "ditolak") {
+        res.status(403).json({
+          message: "Data ditolak oleh admin",
+          catatanVerifikasi: existing.catatanVerifikasi,
+        });
+        return;
+      }
+
       const fields = buildReferensiFields(req.body);
       if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
         res.status(400).json({ message: "Jenis TSL tidak valid" });
@@ -173,7 +253,7 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
       const [updated] = await db
         .update(referensiTsl)
         .set({
-          pendingChanges: fields,
+          pendingChanges: { ...fields, diajukanOleh: user.id },
           statusVerifikasi: "pending",
           createdBy: existing.createdBy ?? user.id,
           updatedAt: new Date(),
@@ -181,10 +261,12 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
         .where(eq(referensiTsl.id, id))
         .returning();
 
-      res.status(200).json({
-        message: "Perubahan telah diajukan, menunggu persetujuan admin",
-        data: updated,
-      });
+      res
+        .status(200)
+        .json({
+          message: "Perubahan telah diajukan, menunggu persetujuan admin",
+          data: updated,
+        });
       return;
     }
 
@@ -218,15 +300,22 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
       .where(eq(referensiTsl.id, id))
       .returning();
 
-    res.status(200).json({ message: "Referensi TSL berhasil diperbarui", data: updated });
-  } catch (error) {
-    return handleError(res, error, "updateReferensi", "Gagal memperbarui referensi TSL");
+    res
+      .status(200)
+      .json({ message: "Referensi TSL berhasil diperbarui", data: updated });
+  } catch {
+    res.status(500).json({ message: "Gagal memperbarui referensi TSL" });
   }
 }
 
 // ─── DELETE /api/referensi-tsl/:id ───────────────────────────────────────────
 
-export async function deleteReferensi(req: AuthRequest, res: Response) {
+// ─── DELETE /api/referensi-tsl/:id ───────────────────────────────────────────
+
+export async function deleteReferensi(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
@@ -243,10 +332,27 @@ export async function deleteReferensi(req: AuthRequest, res: Response) {
     }
 
     if (user.role === "bidang_wilayah") {
+      if (existing.statusVerifikasi === "pending") {
+        res
+          .status(403)
+          .json({
+            message:
+              "Data sedang menunggu persetujuan admin, tidak bisa dihapus",
+          });
+        return;
+      }
+      if (existing.statusVerifikasi === "ditolak") {
+        res.status(403).json({
+          message: "Data ditolak oleh admin",
+          catatanVerifikasi: existing.catatanVerifikasi,
+        });
+        return;
+      }
+
       await db
         .update(referensiTsl)
         .set({
-          pendingChanges: { _action: "delete" },
+          pendingChanges: { _action: "delete", diajukanOleh: user.id },
           statusVerifikasi: "pending",
           createdBy: existing.createdBy ?? user.id,
           updatedAt: new Date(),
@@ -263,6 +369,7 @@ export async function deleteReferensi(req: AuthRequest, res: Response) {
     return handleError(res, error, "deleteReferensi", "Gagal menghapus referensi TSL");
   }
 }
+
 
 // ─── DELETE /api/referensi-tsl/bulk ──────────────────────────────────────────
 

@@ -20,7 +20,7 @@ async function seedWilayah() {
   const existing = await db.query.wilayah.findFirst();
 
   if (existing) {
-    console.log("⚠️  Data wilayah sudah ada, skip.");
+    console.log("Data wilayah sudah ada, skip.");
     return;
   }
 
@@ -39,7 +39,7 @@ async function seedWilayah() {
     { nomorWilayah: "VI", namaWilayah: "Tasikmalaya", alamatWilayah: "Tasikmalaya", tipeWilayah: "seksi" },
   ]);
 
-  console.log("✅ Data wilayah dibuat!");
+  console.log("Data wilayah dibuat!");
 }
 
 async function seedAdmin() {

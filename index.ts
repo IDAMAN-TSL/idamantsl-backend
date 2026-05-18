@@ -15,6 +15,7 @@ const app = express();
 const PORT = process.env.PORT;
 
 app.disable("x-powered-by");
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
