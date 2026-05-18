@@ -94,33 +94,28 @@ export async function getAllReferensi(
 ): Promise<void> {
   try {
     const { statusVerifikasi } = req.query;
-    const validStatus = ["pending", "disetujui", "ditolak"];
+    const validStatus = ["pending", "disetujui", "ditolak", "all"];
 
     if (statusVerifikasi && !validStatus.includes(statusVerifikasi as string)) {
-      res
-        .status(400)
-        .json({
-          message:
-            "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak",
-        });
+      res.status(400).json({ message: "statusVerifikasi tidak valid. Gunakan: pending, disetujui, ditolak, atau all" });
       return;
     }
+
+    // Default: tampilkan hanya data yang sudah disetujui di tabel utama.
+    // - "?statusVerifikasi=pending" / "ditolak" → filter eksplisit
+    // - "?statusVerifikasi=all"                  → tampilkan semua status
+    const statusFilter = (statusVerifikasi as string | undefined) ?? "disetujui";
 
     const query = db
       .select(SELECT_FIELDS)
       .from(referensiTsl)
       .leftJoin(users, eq(referensiTsl.createdBy, users.id));
 
-    const result = statusVerifikasi
-      ? await query
-          .where(
-            eq(
-              referensiTsl.statusVerifikasi,
-              statusVerifikasi as "pending" | "disetujui" | "ditolak",
-            ),
-          )
-          .orderBy(referensiTsl.createdAt)
-      : await query.orderBy(referensiTsl.createdAt);
+    const result = statusFilter === "all"
+      ? await query.orderBy(referensiTsl.createdAt)
+      : await query
+        .where(eq(referensiTsl.statusVerifikasi, statusFilter as "pending" | "disetujui" | "ditolak"))
+        .orderBy(referensiTsl.createdAt);
 
     res.status(200).json({ data: result });
   } catch (error) {
@@ -279,20 +274,20 @@ export async function updateReferensi(
     }
 
     const updateData: Partial<typeof referensiTsl.$inferInsert> = {};
-    if (fields.nomor !== undefined)                       updateData.nomor = fields.nomor;
-    if (fields.namaDaerah)                                updateData.namaDaerah = fields.namaDaerah;
-    if (fields.jenis)                                     updateData.jenis = fields.jenis;
-    if (fields.kingdom !== undefined)                     updateData.kingdom = fields.kingdom;
-    if (fields.divisi !== undefined)                      updateData.divisi = fields.divisi;
-    if (fields.kelas !== undefined)                       updateData.kelas = fields.kelas;
-    if (fields.ordo !== undefined)                        updateData.ordo = fields.ordo;
-    if (fields.famili !== undefined)                      updateData.famili = fields.famili;
-    if (fields.genus !== undefined)                       updateData.genus = fields.genus;
-    if (fields.spesies !== undefined)                     updateData.spesies = fields.spesies;
-    if (fields.statusPerlindunganNasional !== undefined)  updateData.statusPerlindunganNasional = fields.statusPerlindunganNasional;
-    if (fields.statusCites !== undefined)                 updateData.statusCites = fields.statusCites;
-    if (fields.statusIucn !== undefined)                  updateData.statusIucn = fields.statusIucn;
-    if (fields.catatanVerifikasi !== undefined)           updateData.catatanVerifikasi = fields.catatanVerifikasi;
+    if (fields.nomor !== undefined) updateData.nomor = fields.nomor;
+    if (fields.namaDaerah) updateData.namaDaerah = fields.namaDaerah;
+    if (fields.jenis) updateData.jenis = fields.jenis;
+    if (fields.kingdom !== undefined) updateData.kingdom = fields.kingdom;
+    if (fields.divisi !== undefined) updateData.divisi = fields.divisi;
+    if (fields.kelas !== undefined) updateData.kelas = fields.kelas;
+    if (fields.ordo !== undefined) updateData.ordo = fields.ordo;
+    if (fields.famili !== undefined) updateData.famili = fields.famili;
+    if (fields.genus !== undefined) updateData.genus = fields.genus;
+    if (fields.spesies !== undefined) updateData.spesies = fields.spesies;
+    if (fields.statusPerlindunganNasional !== undefined) updateData.statusPerlindunganNasional = fields.statusPerlindunganNasional;
+    if (fields.statusCites !== undefined) updateData.statusCites = fields.statusCites;
+    if (fields.statusIucn !== undefined) updateData.statusIucn = fields.statusIucn;
+    if (fields.catatanVerifikasi !== undefined) updateData.catatanVerifikasi = fields.catatanVerifikasi;
 
     const [updated] = await db
       .update(referensiTsl)

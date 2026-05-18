@@ -5,33 +5,55 @@ import { db } from "../../db";
 // Gunakan AuthRequest dari middleware agar tipe user konsisten di seluruh app
 import { AuthRequest } from "../middlewares/auth.middleware";
 
-// ─── Tipe generik untuk table Drizzle yang punya id & createdBy ───────────────
+// ─── Tipe generik untuk table Drizzle ─────────────────────────────────────────
 
 type TableWithIdAndCreatedBy = {
   id: import("drizzle-orm/pg-core").PgColumn;
   createdBy: import("drizzle-orm/pg-core").PgColumn;
 };
 
+// Tabel yang mendukung soft-delete via pendingChanges (referensiTsl, penangkaran, dll.)
+type TableWithPendingApproval = TableWithIdAndCreatedBy & {
+  statusVerifikasi: import("drizzle-orm/pg-core").PgColumn;
+  pendingChanges: import("drizzle-orm/pg-core").PgColumn;
+  updatedAt: import("drizzle-orm/pg-core").PgColumn;
+};
+
 // ─── isNotOwner ───────────────────────────────────────────────────────────────
+//
+// Aturan baru:
+// - admin_pusat       → boleh semua (return false)
+// - bidang_wilayah    → boleh menginisiasi perubahan pada data MANAPUN
+//                        (perubahan tetap masuk antrean approval), jadi pengecekan
+//                        ownership dimatikan supaya tidak menghalangi UI/controller
+//                        memproses request.
+// - role lain         → diblokir kalau bukan pemilik (perilaku lama).
 
 export const isNotOwner = (
   role: string | undefined,
   createdBy: number | null,
   userId: number | undefined
 ): boolean => {
-  // Semua role bidang_wilayah diizinkan mengubah/menghapus, namun akan masuk status pending
-  return false;
+  if (role === "admin_pusat") return false;
+  if (role === "bidang_wilayah") return false;
+  return createdBy !== userId;
 };
 
 // ─── bulkDeleteHandler ────────────────────────────────────────────────────────
 // Digunakan oleh penangkaran dan referensi-tsl (dan tabel lain di masa depan)
+//
+// Aturan:
+// - admin_pusat       → hard delete langsung.
+// - bidang_wilayah    → soft delete: status diubah jadi "pending" dan
+//                        pendingChanges diisi { _action: "delete", diajukanOleh }.
+// - role lain         → ownership check seperti sebelumnya.
 
 type FindByIdFn<T> = (id: number) => Promise<T | null | undefined>;
 
 export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
   req: AuthRequest,
   res: Response,
-  table: TableWithIdAndCreatedBy,
+  table: TableWithPendingApproval,
   findById: FindByIdFn<T>,
   entityName: string // e.g. "penangkaran" | "referensi TSL"
 ): Promise<Response> {
@@ -53,32 +75,46 @@ export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
     });
   }
 
-  // Cek ownership jika bidang_wilayah (Dihapus: bidang_wilayah kini bisa hapus dengan status pending)
-  if (req.user?.role === "bidang_wilayah") {
-    // Validasi apakah ada data yang sedang pending
-    const dataList = await Promise.all(numericIds.map((id) => findById(id)));
-    const hasPending = dataList.some((d: any) => d && d.statusVerifikasi === "pending");
-    
-    if (hasPending) {
-      return res.status(403).json({
-        success: false,
-        message: "Beberapa data sedang menunggu persetujuan admin, tidak bisa dihapus",
-      });
-    }
-
-    await db.update(table as any).set({
-      pendingChanges: { _action: "delete", diajukanOleh: req.user.id },
-      statusVerifikasi: "pending",
-      updatedAt: new Date(),
-    }).where(inArray(table.id, numericIds));
-
-    return res.status(200).json({
-      success: true,
-      message: `Pengajuan penghapusan ${numericIds.length} data ${entityName} telah dikirim, menunggu persetujuan admin`,
+  // Pastikan semua data ada (cek keberadaan untuk memberi pesan yang tepat)
+  const dataList = await Promise.all(numericIds.map((id) => findById(id)));
+  const missing = dataList.some((d) => !d);
+  if (missing) {
+    return res.status(404).json({
+      success: false,
+      message: `Beberapa data ${entityName} tidak ditemukan`,
     });
   }
 
-  await db.delete(table as any).where(inArray(table.id, numericIds));
+  // bidang_wilayah: ajukan penghapusan, tidak hard delete
+  if (req.user?.role === "bidang_wilayah") {
+    await db
+      .update(table as never)
+      .set({
+        statusVerifikasi: "pending",
+        pendingChanges: { _action: "delete", diajukanOleh: req.user.id } as never,
+        updatedAt: new Date(),
+      } as never)
+      .where(inArray(table.id, numericIds));
+
+    return res.status(200).json({
+      success: true,
+      message: `${numericIds.length} pengajuan penghapusan ${entityName} dikirim, menunggu persetujuan Admin Pusat`,
+    });
+  }
+
+  // Role selain admin/bidang: pertahankan ownership check lama
+  if (req.user?.role !== "admin_pusat") {
+    const notOwned = dataList.some((d) => !d || d.createdBy !== req.user?.id);
+    if (notOwned) {
+      return res.status(403).json({
+        success: false,
+        message: "Beberapa data bukan milik Anda",
+      });
+    }
+  }
+
+  // admin_pusat (atau pemilik valid) → hard delete
+  await db.delete(table as never).where(inArray(table.id, numericIds));
 
   return res.status(200).json({
     success: true,

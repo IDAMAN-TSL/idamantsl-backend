@@ -5,6 +5,9 @@ import {
   verifikasiLog,
   referensiTsl,
   penangkaran,
+  pengedaranDalamNegeri,
+  pengedaranLuarNegeri,
+  lembagaKonservasi,
   users,
 } from "../../db/schema";
 import { handleError } from "../helpers/controller.helpers";
@@ -32,8 +35,6 @@ type TableDef = {
   update: (id: number, data: Record<string, unknown>) => Promise<void>;
   delete: (id: number) => Promise<void>;
 };
-
-// ─── Table Registry ───────────────────────────────────────────────────────────
 
 const TABLE_REGISTRY: Partial<Record<TabelTarget, TableDef>> = {
   referensi_tsl: {
@@ -70,6 +71,30 @@ const TABLE_REGISTRY: Partial<Record<TabelTarget, TableDef>> = {
     delete: async (id) =>
       void (await db.delete(penangkaran).where(eq(penangkaran.id, id))),
   },
+  pengedaran_dalam_negeri: {
+    find: async (id) =>
+      (await db.select().from(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.id, id)).limit(1))[0] ?? null,
+    update: async (id, data) =>
+      void (await db.update(pengedaranDalamNegeri).set(data).where(eq(pengedaranDalamNegeri.id, id))),
+    delete: async (id) =>
+      void (await db.delete(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.id, id))),
+  },
+  pengedaran_luar_negeri: {
+    find: async (id) =>
+      (await db.select().from(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.id, id)).limit(1))[0] ?? null,
+    update: async (id, data) =>
+      void (await db.update(pengedaranLuarNegeri).set(data).where(eq(pengedaranLuarNegeri.id, id))),
+    delete: async (id) =>
+      void (await db.delete(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.id, id))),
+  },
+  lembaga_konservasi: {
+    find: async (id) =>
+      (await db.select().from(lembagaKonservasi).where(eq(lembagaKonservasi.id, id)).limit(1))[0] ?? null,
+    update: async (id, data) =>
+      void (await db.update(lembagaKonservasi).set(data).where(eq(lembagaKonservasi.id, id))),
+    delete: async (id) =>
+      void (await db.delete(lembagaKonservasi).where(eq(lembagaKonservasi.id, id))),
+  },
 };
 
 const VALID_TABEL = Object.keys(TABLE_REGISTRY) as TabelTarget[];
@@ -80,35 +105,50 @@ function getTableDef(tabel: TabelTarget): TableDef {
   return def;
 }
 
-// ─── Helper: Tentukan jenis pengajuan ────────────────────────────────────────
-
 function getJenisPengajuan(
   pendingChanges: Record<string, unknown> | null,
 ): JenisPengajuan {
   if (pendingChanges?._action === "delete") return "hapus";
-  if (pendingChanges && Object.keys(pendingChanges).length > 0)
-    return "perbarui";
-  // pendingChanges null = data baru yang belum disetujui (tambah)
+  if (pendingChanges && Object.keys(pendingChanges).length > 0) return "perbarui";
   return "tambah";
 }
 
-// ─── Helper: Insert log verifikasi ───────────────────────────────────────────
+// Ambil ID user yang mengajukan perubahan.
+// Prioritas: pendingChanges.diajukanOleh > record.createdBy
+function getDiajukanOleh(
+  pendingChanges: Record<string, unknown> | null,
+  fallbackCreatedBy: number | null
+): number | null {
+  const diajukan = pendingChanges?.diajukanOleh;
+  if (typeof diajukan === "number") return diajukan;
+  return fallbackCreatedBy;
+}
+
+// Bersihkan pendingChanges dari metadata internal sebelum diaplikasikan
+// ke tabel target. Tabel target tidak punya kolom `_action` / `diajukanOleh`.
+function sanitizePendingChanges(
+  pendingChanges: Record<string, unknown> | null
+): Record<string, unknown> {
+  if (!pendingChanges) return {};
+  const { _action: _drop1, diajukanOleh: _drop2, ...clean } = pendingChanges;
+  return clean;
+}
 
 async function insertVerifikasiLog(
   tabelTarget: TabelTarget,
   targetId: number,
   status: "disetujui" | "ditolak" | "pending",
   jenisPengajuan: JenisPengajuan,
-  createdBy: number | null,
-  verifikasiOleh: number,
-  catatan?: string | null,
+  diajukanOleh: number | null,  // ← ID bidang_wilayah yang mengajukan
+  verifikasiOleh: number,        // ← ID admin_pusat yang memverifikasi
+  catatan?: string | null
 ) {
   await db.insert(verifikasiLog).values({
     tabelTarget,
     targetId,
     status,
     jenisPengajuan,
-    createdBy,
+    createdBy: diajukanOleh,   // ← kolom di DB tetap createdBy, nilainya dari record.createdBy
     verifikasiOleh,
     catatan: catatan ?? null,
   });
@@ -144,6 +184,7 @@ async function findPendingRecord(
 }
 
 // ─── Helper: Ambil nama inputor dari users ────────────────────────────────────
+// DEPRECATED: Tidak digunakan lagi, diganti dengan userMap di getDataPending
 
 async function getNamaInputor(
   createdBy: number | null,
@@ -164,31 +205,58 @@ export async function getDataPending(
   res: Response,
 ): Promise<void> {
   try {
-    const [referensiPending, penangkaranPending] = await Promise.all([
-      db
-        .select({
-          id: referensiTsl.id,
-          namaDaerah: referensiTsl.namaDaerah,
-          jenis: referensiTsl.jenis,
-          statusVerifikasi: referensiTsl.statusVerifikasi,
-          pendingChanges: referensiTsl.pendingChanges,
-          createdBy: referensiTsl.createdBy,
-          updatedAt: referensiTsl.updatedAt,
-        })
-        .from(referensiTsl)
-        .where(eq(referensiTsl.statusVerifikasi, "pending")),
+    const [
+      referensiPending,
+      penangkaranPending,
+      pengedaranDnPending,
+      pengedaranLnPending,
+      lembagaPending,
+    ] = await Promise.all([
+      db.select({
+        id: referensiTsl.id,
+        namaDaerah: referensiTsl.namaDaerah,
+        jenis: referensiTsl.jenis,
+        statusVerifikasi: referensiTsl.statusVerifikasi,
+        pendingChanges: referensiTsl.pendingChanges,
+        createdBy: referensiTsl.createdBy,
+        updatedAt: referensiTsl.updatedAt,
+      }).from(referensiTsl).where(eq(referensiTsl.statusVerifikasi, "pending")),
 
-      db
-        .select({
-          id: penangkaran.id,
-          namaPenangkaran: penangkaran.namaPenangkaran,
-          statusVerifikasi: penangkaran.statusVerifikasi,
-          pendingChanges: penangkaran.pendingChanges,
-          createdBy: penangkaran.createdBy,
-          updatedAt: penangkaran.updatedAt,
-        })
-        .from(penangkaran)
-        .where(eq(penangkaran.statusVerifikasi, "pending")),
+      db.select({
+        id: penangkaran.id,
+        namaPenangkaran: penangkaran.namaPenangkaran,
+        statusVerifikasi: penangkaran.statusVerifikasi,
+        pendingChanges: penangkaran.pendingChanges,
+        createdBy: penangkaran.createdBy,
+        updatedAt: penangkaran.updatedAt,
+      }).from(penangkaran).where(eq(penangkaran.statusVerifikasi, "pending")),
+
+      db.select({
+        id: pengedaranDalamNegeri.id,
+        namaPengedaran: pengedaranDalamNegeri.namaPengedaran,
+        statusVerifikasi: pengedaranDalamNegeri.statusVerifikasi,
+        pendingChanges: pengedaranDalamNegeri.pendingChanges,
+        createdBy: pengedaranDalamNegeri.createdBy,
+        updatedAt: pengedaranDalamNegeri.updatedAt,
+      }).from(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.statusVerifikasi, "pending")),
+
+      db.select({
+        id: pengedaranLuarNegeri.id,
+        namaPengedaran: pengedaranLuarNegeri.namaPengedaran,
+        statusVerifikasi: pengedaranLuarNegeri.statusVerifikasi,
+        pendingChanges: pengedaranLuarNegeri.pendingChanges,
+        createdBy: pengedaranLuarNegeri.createdBy,
+        updatedAt: pengedaranLuarNegeri.updatedAt,
+      }).from(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.statusVerifikasi, "pending")),
+
+      db.select({
+        id: lembagaKonservasi.id,
+        namaLembaga: lembagaKonservasi.namaLembaga,
+        statusVerifikasi: lembagaKonservasi.statusVerifikasi,
+        pendingChanges: lembagaKonservasi.pendingChanges,
+        createdBy: lembagaKonservasi.createdBy,
+        updatedAt: lembagaKonservasi.updatedAt,
+      }).from(lembagaKonservasi).where(eq(lembagaKonservasi.statusVerifikasi, "pending")),
     ]);
 
     // Ambil semua user sekaligus untuk mapping nama inputor
@@ -200,36 +268,42 @@ export async function getDataPending(
       userMap[u.id] = u.nama;
     });
 
-    const referensiMapped = referensiPending.map((r) => {
-      const pendingChanges = r.pendingChanges as Record<string, unknown> | null;
-      const diajukanOleh = (pendingChanges?.diajukanOleh as number) || r.createdBy;
+    const mapItem = (
+      item: Record<string, unknown>,
+      tabelTarget: TabelTarget
+    ) => {
+      const pendingChanges = item.pendingChanges as Record<string, unknown> | null;
+      const inputorId = getDiajukanOleh(pendingChanges, item.createdBy as number | null);
       return {
-        ...r,
-        tabelTarget: "referensi_tsl",
+        ...item,
+        tabelTarget,
         jenisPengajuan: getJenisPengajuan(pendingChanges),
-        namaInputor: diajukanOleh ? (userMap[diajukanOleh] ?? null) : null,
-        createdBy: diajukanOleh, // override untuk konsistensi view
+        namaInputor: inputorId ? userMap[inputorId] ?? null : null,
       };
-    });
+    };
 
-    const penangkaranMapped = penangkaranPending.map((p) => {
-      const pendingChanges = p.pendingChanges as Record<string, unknown> | null;
-      const diajukanOleh = (pendingChanges?.diajukanOleh as number) || p.createdBy;
-      return {
-        ...p,
-        tabelTarget: "penangkaran",
-        jenisPengajuan: getJenisPengajuan(pendingChanges),
-        namaInputor: diajukanOleh ? (userMap[diajukanOleh] ?? null) : null,
-        createdBy: diajukanOleh, // override untuk konsistensi view
-      };
-    });
+    const referensiMapped = referensiPending.map(r => mapItem(r as Record<string, unknown>, "referensi_tsl"));
+    const penangkaranMapped = penangkaranPending.map(p => mapItem(p as Record<string, unknown>, "penangkaran"));
+    const dnMapped = pengedaranDnPending.map(p => mapItem(p as Record<string, unknown>, "pengedaran_dalam_negeri"));
+    const lnMapped = pengedaranLnPending.map(p => mapItem(p as Record<string, unknown>, "pengedaran_luar_negeri"));
+    const lembagaMapped = lembagaPending.map(p => mapItem(p as Record<string, unknown>, "lembaga_konservasi"));
+
+    const total =
+      referensiMapped.length +
+      penangkaranMapped.length +
+      dnMapped.length +
+      lnMapped.length +
+      lembagaMapped.length;
 
     res.status(200).json({
       data: {
         referensi_tsl: referensiMapped,
         penangkaran: penangkaranMapped,
+        pengedaran_dalam_negeri: dnMapped,
+        pengedaran_luar_negeri: lnMapped,
+        lembaga_konservasi: lembagaMapped,
       },
-      total: referensiMapped.length + penangkaranMapped.length,
+      total,
     });
   } catch (error) {
     console.error("getDataPending error:", error);
@@ -244,43 +318,71 @@ export async function getDataApproved(
   res: Response,
 ): Promise<void> {
   try {
-    const [referensiApproved, penangkaranApproved] = await Promise.all([
-      db
-        .select({
-          id: referensiTsl.id,
-          namaDaerah: referensiTsl.namaDaerah,
-          jenis: referensiTsl.jenis,
-          statusVerifikasi: referensiTsl.statusVerifikasi,
-          createdBy: referensiTsl.createdBy,
-          updatedAt: referensiTsl.updatedAt,
-        })
-        .from(referensiTsl)
-        .where(eq(referensiTsl.statusVerifikasi, "disetujui")),
+    const [
+      referensiApproved,
+      penangkaranApproved,
+      dnApproved,
+      lnApproved,
+      lembagaApproved,
+    ] = await Promise.all([
+      db.select({
+        id: referensiTsl.id,
+        namaDaerah: referensiTsl.namaDaerah,
+        jenis: referensiTsl.jenis,
+        statusVerifikasi: referensiTsl.statusVerifikasi,
+        createdBy: referensiTsl.createdBy,
+        updatedAt: referensiTsl.updatedAt,
+      }).from(referensiTsl).where(eq(referensiTsl.statusVerifikasi, "disetujui")),
 
-      db
-        .select({
-          id: penangkaran.id,
-          namaPenangkaran: penangkaran.namaPenangkaran,
-          statusVerifikasi: penangkaran.statusVerifikasi,
-          createdBy: penangkaran.createdBy,
-          updatedAt: penangkaran.updatedAt,
-        })
-        .from(penangkaran)
-        .where(eq(penangkaran.statusVerifikasi, "disetujui")),
+      db.select({
+        id: penangkaran.id,
+        namaPenangkaran: penangkaran.namaPenangkaran,
+        statusVerifikasi: penangkaran.statusVerifikasi,
+        createdBy: penangkaran.createdBy,
+        updatedAt: penangkaran.updatedAt,
+      }).from(penangkaran).where(eq(penangkaran.statusVerifikasi, "disetujui")),
+
+      db.select({
+        id: pengedaranDalamNegeri.id,
+        namaPengedaran: pengedaranDalamNegeri.namaPengedaran,
+        statusVerifikasi: pengedaranDalamNegeri.statusVerifikasi,
+        createdBy: pengedaranDalamNegeri.createdBy,
+        updatedAt: pengedaranDalamNegeri.updatedAt,
+      }).from(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.statusVerifikasi, "disetujui")),
+
+      db.select({
+        id: pengedaranLuarNegeri.id,
+        namaPengedaran: pengedaranLuarNegeri.namaPengedaran,
+        statusVerifikasi: pengedaranLuarNegeri.statusVerifikasi,
+        createdBy: pengedaranLuarNegeri.createdBy,
+        updatedAt: pengedaranLuarNegeri.updatedAt,
+      }).from(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.statusVerifikasi, "disetujui")),
+
+      db.select({
+        id: lembagaKonservasi.id,
+        namaLembaga: lembagaKonservasi.namaLembaga,
+        statusVerifikasi: lembagaKonservasi.statusVerifikasi,
+        createdBy: lembagaKonservasi.createdBy,
+        updatedAt: lembagaKonservasi.updatedAt,
+      }).from(lembagaKonservasi).where(eq(lembagaKonservasi.statusVerifikasi, "disetujui")),
     ]);
+
+    const total =
+      referensiApproved.length +
+      penangkaranApproved.length +
+      dnApproved.length +
+      lnApproved.length +
+      lembagaApproved.length;
 
     res.status(200).json({
       data: {
-        referensi_tsl: referensiApproved.map((r) => ({
-          ...r,
-          tabelTarget: "referensi_tsl",
-        })),
-        penangkaran: penangkaranApproved.map((p) => ({
-          ...p,
-          tabelTarget: "penangkaran",
-        })),
+        referensi_tsl: referensiApproved.map(r => ({ ...r, tabelTarget: "referensi_tsl" as const })),
+        penangkaran: penangkaranApproved.map(p => ({ ...p, tabelTarget: "penangkaran" as const })),
+        pengedaran_dalam_negeri: dnApproved.map(p => ({ ...p, tabelTarget: "pengedaran_dalam_negeri" as const })),
+        pengedaran_luar_negeri: lnApproved.map(p => ({ ...p, tabelTarget: "pengedaran_luar_negeri" as const })),
+        lembaga_konservasi: lembagaApproved.map(p => ({ ...p, tabelTarget: "lembaga_konservasi" as const })),
       },
-      total: referensiApproved.length + penangkaranApproved.length,
+      total,
     });
   } catch (error) {
     console.error("getDataApproved error:", error);
@@ -318,7 +420,8 @@ export async function approveData(
     > | null;
     const isDeleteRequest = pendingChanges?._action === "delete";
     const jenisPengajuan = getJenisPengajuan(pendingChanges);
-    const diajukanOleh = (pendingChanges?.diajukanOleh as number) || ((record.createdBy as number | null) ?? null);
+
+    const diajukanOleh = getDiajukanOleh(pendingChanges, (record.createdBy as number | null) ?? null);
 
     if (isDeleteRequest) {
       await tableDef.delete(Number(targetId));
@@ -327,9 +430,9 @@ export async function approveData(
         Number(targetId),
         "disetujui",
         jenisPengajuan,
-        diajukanOleh,
-        user.id,
-        catatan ?? "Pengajuan penghapusan disetujui",
+        diajukanOleh,  // ← ID bidang_wilayah
+        user.id,        // ← ID admin_pusat yang approve
+        catatan ?? "Pengajuan penghapusan disetujui"
       );
       res.status(200).json({
         message: "Pengajuan penghapusan disetujui, data telah dihapus",
@@ -338,7 +441,7 @@ export async function approveData(
     }
 
     await tableDef.update(Number(targetId), {
-      ...(pendingChanges ?? {}),
+      ...sanitizePendingChanges(pendingChanges),
       pendingChanges: null,
       statusVerifikasi: "disetujui",
       updatedAt: new Date(),
@@ -349,9 +452,9 @@ export async function approveData(
       Number(targetId),
       "disetujui",
       jenisPengajuan,
-      diajukanOleh,
-      user.id,
-      catatan,
+      diajukanOleh,  // ← ID bidang_wilayah
+      user.id,        // ← ID admin_pusat yang approve
+      catatan
     );
 
     res.status(200).json({ message: "Data berhasil disetujui" });
@@ -396,7 +499,10 @@ export async function tolakData(
       unknown
     > | null;
     const jenisPengajuan = getJenisPengajuan(pendingChanges);
-    const diajukanOleh = (pendingChanges?.diajukanOleh as number) || ((record.createdBy as number | null) ?? null);
+
+    // Prioritaskan diajukanOleh dari pendingChanges (bidang_wilayah yang ngedit
+    // data milik admin_pusat). Fallback: createdBy.
+    const diajukanOleh = getDiajukanOleh(pendingChanges, (record.createdBy as number | null) ?? null);
 
     // Catatan: pendingChanges SENGAJA tidak di-null-kan saat penolakan.
     // Hal ini memungkinkan frontend non-admin membaca jenis pengajuan
@@ -414,9 +520,9 @@ export async function tolakData(
       Number(targetId),
       "ditolak",
       jenisPengajuan,
-      diajukanOleh,
-      user.id,
-      catatan,
+      diajukanOleh,  // ← ID bidang_wilayah
+      user.id,        // ← ID admin_pusat yang tolak
+      catatan
     );
 
     res.status(200).json({ message: "Data berhasil ditolak", catatan });
