@@ -72,6 +72,37 @@ export function createModuleController(opts: ModuleControllerOptions) {
         return result[0];
     }
 
+    // ── resolveExisting ───────────────────────────────────────────────────────
+    // Parse & validasi ID dari params, cek eksistensi data, cek ownership.
+    // Mengembalikan data yang ada atau objek error untuk langsung di-return.
+
+    async function resolveExisting(
+        req: AuthRequest,
+        res: Response
+    ): Promise<
+        | { ok: true; id: number; existing: Record<string, unknown> }
+        | { ok: false }
+    > {
+        const id = Number(req.params.id);
+        if (isNaN(id)) {
+            res.status(400).json({ success: false, message: "ID tidak valid" });
+            return { ok: false };
+        }
+
+        const existing = await findById(id);
+        if (!existing) {
+            res.status(404).json({ success: false, message: `Data ${entityName} tidak ditemukan` });
+            return { ok: false };
+        }
+
+        if (isNotOwner(req.user?.role, existing.createdBy as number | null, req.user?.id)) {
+            res.status(403).json({ success: false, message: "Anda tidak memiliki izin mengubah data ini" });
+            return { ok: false };
+        }
+
+        return { ok: true, id, existing };
+    }
+
     // ── GET /api/<module> ─────────────────────────────────────────────────────
     const getAll = async (req: AuthRequest, res: Response) => {
         try {
@@ -184,25 +215,9 @@ export function createModuleController(opts: ModuleControllerOptions) {
     // ── PUT /api/<module>/:id ─────────────────────────────────────────────────
     const update = async (req: AuthRequest, res: Response) => {
         try {
-            const id = Number(req.params.id);
-            if (isNaN(id)) {
-                return res.status(400).json({ success: false, message: "ID tidak valid" });
-            }
-
-            const existing = await findById(id);
-            if (!existing) {
-                return res.status(404).json({
-                    success: false,
-                    message: `Data ${entityName} tidak ditemukan`,
-                });
-            }
-
-            if (isNotOwner(req.user?.role, existing.createdBy as number | null, req.user?.id)) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Anda tidak memiliki izin mengubah data ini",
-                });
-            }
+            const resolved = await resolveExisting(req, res);
+            if (!resolved.ok) return;
+            const { id, existing } = resolved;
 
             // bidang_wilayah → simpan ke pendingChanges
             if (req.user?.role === "bidang_wilayah") {
@@ -256,25 +271,9 @@ export function createModuleController(opts: ModuleControllerOptions) {
     // ── DELETE /api/<module>/:id ──────────────────────────────────────────────
     const remove = async (req: AuthRequest, res: Response) => {
         try {
-            const id = Number(req.params.id);
-            if (isNaN(id)) {
-                return res.status(400).json({ success: false, message: "ID tidak valid" });
-            }
-
-            const existing = await findById(id);
-            if (!existing) {
-                return res.status(404).json({
-                    success: false,
-                    message: `Data ${entityName} tidak ditemukan`,
-                });
-            }
-
-            if (isNotOwner(req.user?.role, existing.createdBy as number | null, req.user?.id)) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Anda tidak memiliki izin menghapus data ini",
-                });
-            }
+            const resolved = await resolveExisting(req, res);
+            if (!resolved.ok) return;
+            const { id } = resolved;
 
             // bidang_wilayah → soft delete
             if (req.user?.role === "bidang_wilayah") {
