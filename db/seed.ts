@@ -105,6 +105,64 @@ async function seedBidangWilayah() {
 
   console.log("✅ User bidang wilayah dibuat!");
 }
+async function seedSeksiWilayah() {
+  const usersData = [
+    {
+      nama: "Seksi KSDA I Serang",
+      email: "seksi1@bbksda.id",
+      role: "seksi_wilayah" as const,
+      wilayahId: 4,
+    },
+    {
+      nama: "Seksi KSDA II Bogor",
+      email: "seksi2@bbksda.id",
+      role: "seksi_wilayah" as const,
+      wilayahId: 5,
+    },
+    {
+      nama: "Seksi KSDA III Soreang",
+      email: "seksi3@bbksda.id",
+      role: "seksi_wilayah" as const,
+      wilayahId: 6,
+    },
+    {
+      nama: "Seksi KSDA IV Purwakarta",
+      email: "seksi4@bbksda.id",
+      role: "seksi_wilayah" as const,
+      wilayahId: 7,
+    },
+    {
+      nama: "Seksi KSDA V Garut",
+      email: "seksi5@bbksda.id",
+      role: "seksi_wilayah" as const,
+      wilayahId: 8,
+    },
+    {
+      nama: "Seksi KSDA VI Tasikmalaya",
+      email: "seksi6@bbksda.id",
+      role: "seksi_wilayah" as const,
+      wilayahId: 9,
+    },
+  ];
+
+  for (const user of usersData) {
+    const existing = await db.query.users.findFirst({
+      where: eq(users.email, user.email),
+    });
+
+    if (!existing) {
+      await db.insert(users).values({
+        ...user,
+        password: await bcrypt.hash("admin123", 10),
+        nomorTelepon: null,
+        isActive: true,
+      });
+    }
+  }
+
+  console.log("✅ User seksi wilayah dibuat!");
+}
+
 async function main() {
   console.log("Memulai proses seeding...\n");
 
@@ -114,6 +172,7 @@ async function main() {
   console.log("Seeding akun Admin Pusat...");
   await seedAdmin();
   await seedBidangWilayah();
+  await seedSeksiWilayah();
   console.log("\n✅ Seed selesai!");
   await pool.end();
 }

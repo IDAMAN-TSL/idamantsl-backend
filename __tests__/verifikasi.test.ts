@@ -31,8 +31,8 @@ jest.mock("jsonwebtoken", () => ({
 import jwt from "jsonwebtoken";
 const mockDb = db as jest.Mocked<typeof db>;
 
-const mockAdminUser  = { id: 1, email: "admin@bbksda-jabar.id", role: "admin_pusat",    wilayahId: null };
-const mockBidangUser = { id: 2, email: "budi@bbksda-jabar.id",  role: "bidang_wilayah", wilayahId: 1 };
+const mockAdminUser = { id: 1, email: "admin@bbksda-jabar.id", role: "admin_pusat", wilayahId: null };
+const mockBidangUser = { id: 2, email: "budi@bbksda-jabar.id", role: "bidang_wilayah", wilayahId: 1 };
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
@@ -128,11 +128,14 @@ const mockDeleteChain = () => ({
   where: jest.fn().mockResolvedValue(undefined),
 });
 
-// ─── Helper: setup getDataPending mock (3 db.select calls) ───────────────────
+// ─── Helper: setup getDataPending mock (6 db.select calls) ───────────────────
 // Urutan pemanggilan db.select di getDataPending:
-//   [0] referensiTsl.where("pending")  → mockSelectWhereChain
-//   [1] penangkaran.where("pending")   → mockSelectWhereChain
-//   [2] users (userMap)                → mockSelectFromChain
+//   [0] referensiTsl.where("pending")              → mockSelectWhereChain
+//   [1] penangkaran.where("pending")               → mockSelectWhereChain
+//   [2] pengedaranDalamNegeri.where("pending")     → mockSelectWhereChain
+//   [3] pengedaranLuarNegeri.where("pending")      → mockSelectWhereChain
+//   [4] lembagaKonservasi.where("pending")         → mockSelectWhereChain
+//   [5] users (userMap)                            → mockSelectFromChain
 
 function setupPendingMock(
   referensiList: unknown[],
@@ -142,18 +145,27 @@ function setupPendingMock(
   (mockDb.select as jest.Mock)
     .mockReturnValueOnce(mockSelectWhereChain(referensiList))
     .mockReturnValueOnce(mockSelectWhereChain(penangkaranList))
+    .mockReturnValueOnce(mockSelectWhereChain([]))  // pengedaran dn
+    .mockReturnValueOnce(mockSelectWhereChain([]))  // pengedaran ln
+    .mockReturnValueOnce(mockSelectWhereChain([]))  // lembaga konservasi
     .mockReturnValueOnce(mockSelectFromChain(userList));
 }
 
-// ─── Helper: setup getDataApproved mock (2 db.select calls) ──────────────────
+// ─── Helper: setup getDataApproved mock (5 db.select calls) ──────────────────
 // Urutan:
-//   [0] referensiTsl.where("disetujui") → mockSelectWhereChain
-//   [1] penangkaran.where("disetujui")  → mockSelectWhereChain
+//   [0] referensiTsl.where("disetujui")            → mockSelectWhereChain
+//   [1] penangkaran.where("disetujui")             → mockSelectWhereChain
+//   [2] pengedaranDalamNegeri.where("disetujui")   → mockSelectWhereChain
+//   [3] pengedaranLuarNegeri.where("disetujui")    → mockSelectWhereChain
+//   [4] lembagaKonservasi.where("disetujui")       → mockSelectWhereChain
 
 function setupApprovedMock(referensiList: unknown[], penangkaranList: unknown[]) {
   (mockDb.select as jest.Mock)
     .mockReturnValueOnce(mockSelectWhereChain(referensiList))
-    .mockReturnValueOnce(mockSelectWhereChain(penangkaranList));
+    .mockReturnValueOnce(mockSelectWhereChain(penangkaranList))
+    .mockReturnValueOnce(mockSelectWhereChain([]))  // pengedaran dn
+    .mockReturnValueOnce(mockSelectWhereChain([]))  // pengedaran ln
+    .mockReturnValueOnce(mockSelectWhereChain([])); // lembaga konservasi
 }
 
 // ─── Helper: setup approveData / tolakData mock ───────────────────────────────
@@ -736,6 +748,113 @@ describe("Verifikasi Endpoints", () => {
         .set("Authorization", "Bearer mocked_token");
 
       expect(res.status).toBe(403);
+    });
+  });
+
+  // =============================================
+  // Branch coverage tambahan
+  // =============================================
+
+  describe("Branch coverage: getDiajukanOleh dari pendingChanges.diajukanOleh", () => {
+    it("200 - pending: diajukanOleh dari pendingChanges (bukan createdBy)", async () => {
+      // Menutup branch: typeof diajukan === 'number' → return diajukan
+      // bidang_wilayah (id:2) ngedit data milik admin (createdBy:1)
+      // diajukanOleh: 2 → namaInputor = "Budi Santoso" bukan "Admin BBKSDA"
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupPendingMock([{
+        ...mockReferensiPending,
+        createdBy: 1,                                    // pemilik: admin
+        pendingChanges: { namaDaerah: "Updated", diajukanOleh: 2 }, // pengaju: bidang
+      }], []);
+
+      const res = await request(app)
+        .get("/api/verifikasi/pending")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      // namaInputor harus dari diajukanOleh (2 = "Budi Santoso"), bukan createdBy (1 = "Admin BBKSDA")
+      expect(res.body.data.referensi_tsl[0].namaInputor).toBe("Budi Santoso");
+    });
+
+    it("200 - pending: data 3 tabel baru (dn, ln, lembaga) juga masuk response", async () => {
+      // Menutup branch getDataPending yang include 3 tabel baru di response
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      // Override setupPendingMock untuk isi dn, ln, lembaga
+      (mockDb.select as jest.Mock)
+        .mockReturnValueOnce(mockSelectWhereChain([]))  // referensi
+        .mockReturnValueOnce(mockSelectWhereChain([]))  // penangkaran
+        .mockReturnValueOnce(mockSelectWhereChain([{ id: 10, namaPengedaran: "DN Test", statusVerifikasi: "pending", pendingChanges: null, createdBy: 2, updatedAt: new Date() }]))  // dn
+        .mockReturnValueOnce(mockSelectWhereChain([]))  // ln
+        .mockReturnValueOnce(mockSelectWhereChain([]))  // lembaga
+        .mockReturnValueOnce(mockSelectFromChain(mockAllUsers));
+
+      const res = await request(app)
+        .get("/api/verifikasi/pending")
+        .set("Authorization", "Bearer mocked_token");
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty("pengedaran_dalam_negeri");
+      expect(res.body.data).toHaveProperty("pengedaran_luar_negeri");
+      expect(res.body.data).toHaveProperty("lembaga_konservasi");
+      expect(res.body.data.pengedaran_dalam_negeri).toHaveLength(1);
+    });
+  });
+
+  describe("Branch coverage: approve & tolak tabel baru", () => {
+    it("200 - approve data pengedaran_dalam_negeri", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock({ ...mockPenangkaranPending, statusVerifikasi: "pending" });
+      (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/approve")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "pengedaran_dalam_negeri", targetId: 1 });
+
+      expect(res.status).toBe(200);
+    });
+
+    it("200 - approve data pengedaran_luar_negeri", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock({ ...mockPenangkaranPending, statusVerifikasi: "pending" });
+      (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/approve")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "pengedaran_luar_negeri", targetId: 1 });
+
+      expect(res.status).toBe(200);
+    });
+
+    it("200 - approve data lembaga_konservasi", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock({ ...mockPenangkaranPending, statusVerifikasi: "pending" });
+      (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/approve")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "lembaga_konservasi", targetId: 1 });
+
+      expect(res.status).toBe(200);
+    });
+
+    it("200 - tolak data pengedaran_dalam_negeri", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      setupActionMock({ ...mockPenangkaranPending, statusVerifikasi: "pending" });
+      (mockDb.update as jest.Mock).mockReturnValue(mockUpdateChain());
+      (mockDb.insert as jest.Mock).mockReturnValue(mockInsertChain());
+
+      const res = await request(app)
+        .post("/api/verifikasi/tolak")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "pengedaran_dalam_negeri", targetId: 1, catatan: "Tidak lengkap" });
+
+      expect(res.status).toBe(200);
     });
   });
 });

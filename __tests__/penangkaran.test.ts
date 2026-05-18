@@ -535,6 +535,37 @@ describe("Penangkaran Endpoints", () => {
       expect(uploadFile).toHaveBeenCalled();
     });
 
+    it("admin_pusat update dengan file baru, fileSk lama null → skip deleteFile", async () => {
+      // Menutup branch: if (existing.fileSk) await deleteFile(existing.fileSk)
+      // Kalau fileSk null, deleteFile tidak dipanggil
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      (mockDb.query.penangkaran.findFirst as jest.Mock).mockResolvedValue({
+        ...mockPenangkaran,
+        fileSk: null, // tidak ada file lama
+      });
+      (uploadFile as jest.Mock).mockResolvedValue("https://azure/file-baru.pdf");
+      (mockDb.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([mockPenangkaran]),
+          }),
+        }),
+      });
+
+      const res = await request(app)
+        .put("/api/penangkaran/1")
+        .set("Authorization", `Bearer ${mockAdminToken}`)
+        .field("namaPenangkaran", "Penangkaran Test")
+        .attach("fileSk", Buffer.from("dummy pdf"), {
+          filename: "sk.pdf",
+          contentType: "application/pdf",
+        });
+
+      expect(res.status).toBe(200);
+      expect(deleteFile).not.toHaveBeenCalled();
+      expect(uploadFile).toHaveBeenCalled();
+    });
+
     it("gagal saat server error di PUT", async () => {
       (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
       (mockDb.query.penangkaran.findFirst as jest.Mock).mockRejectedValue(
