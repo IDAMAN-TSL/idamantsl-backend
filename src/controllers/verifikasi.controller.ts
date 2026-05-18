@@ -5,6 +5,9 @@ import {
   verifikasiLog,
   referensiTsl,
   penangkaran,
+  pengedaranDalamNegeri,
+  pengedaranLuarNegeri,
+  lembagaKonservasi,
   users,
 } from "../../db/schema";
 import { handleError } from "../helpers/controller.helpers";
@@ -49,6 +52,30 @@ const TABLE_REGISTRY: Partial<Record<TabelTarget, TableDef>> = {
       void (await db.update(penangkaran).set(data).where(eq(penangkaran.id, id))),
     delete: async (id) =>
       void (await db.delete(penangkaran).where(eq(penangkaran.id, id))),
+  },
+  pengedaran_dalam_negeri: {
+    find: async (id) =>
+      (await db.select().from(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.id, id)).limit(1))[0] ?? null,
+    update: async (id, data) =>
+      void (await db.update(pengedaranDalamNegeri).set(data).where(eq(pengedaranDalamNegeri.id, id))),
+    delete: async (id) =>
+      void (await db.delete(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.id, id))),
+  },
+  pengedaran_luar_negeri: {
+    find: async (id) =>
+      (await db.select().from(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.id, id)).limit(1))[0] ?? null,
+    update: async (id, data) =>
+      void (await db.update(pengedaranLuarNegeri).set(data).where(eq(pengedaranLuarNegeri.id, id))),
+    delete: async (id) =>
+      void (await db.delete(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.id, id))),
+  },
+  lembaga_konservasi: {
+    find: async (id) =>
+      (await db.select().from(lembagaKonservasi).where(eq(lembagaKonservasi.id, id)).limit(1))[0] ?? null,
+    update: async (id, data) =>
+      void (await db.update(lembagaKonservasi).set(data).where(eq(lembagaKonservasi.id, id))),
+    delete: async (id) =>
+      void (await db.delete(lembagaKonservasi).where(eq(lembagaKonservasi.id, id))),
   },
 };
 
@@ -154,7 +181,13 @@ async function getNamaInputor(createdBy: number | null): Promise<string | null> 
 
 export async function getDataPending(_req: AuthRequest, res: Response) {
   try {
-    const [referensiPending, penangkaranPending] = await Promise.all([
+    const [
+      referensiPending,
+      penangkaranPending,
+      pengedaranDnPending,
+      pengedaranLnPending,
+      lembagaPending,
+    ] = await Promise.all([
       db.select({
         id: referensiTsl.id,
         namaDaerah: referensiTsl.namaDaerah,
@@ -173,47 +206,76 @@ export async function getDataPending(_req: AuthRequest, res: Response) {
         createdBy: penangkaran.createdBy,
         updatedAt: penangkaran.updatedAt,
       }).from(penangkaran).where(eq(penangkaran.statusVerifikasi, "pending")),
+
+      db.select({
+        id: pengedaranDalamNegeri.id,
+        namaPengedaran: pengedaranDalamNegeri.namaPengedaran,
+        statusVerifikasi: pengedaranDalamNegeri.statusVerifikasi,
+        pendingChanges: pengedaranDalamNegeri.pendingChanges,
+        createdBy: pengedaranDalamNegeri.createdBy,
+        updatedAt: pengedaranDalamNegeri.updatedAt,
+      }).from(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.statusVerifikasi, "pending")),
+
+      db.select({
+        id: pengedaranLuarNegeri.id,
+        namaPengedaran: pengedaranLuarNegeri.namaPengedaran,
+        statusVerifikasi: pengedaranLuarNegeri.statusVerifikasi,
+        pendingChanges: pengedaranLuarNegeri.pendingChanges,
+        createdBy: pengedaranLuarNegeri.createdBy,
+        updatedAt: pengedaranLuarNegeri.updatedAt,
+      }).from(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.statusVerifikasi, "pending")),
+
+      db.select({
+        id: lembagaKonservasi.id,
+        namaLembaga: lembagaKonservasi.namaLembaga,
+        statusVerifikasi: lembagaKonservasi.statusVerifikasi,
+        pendingChanges: lembagaKonservasi.pendingChanges,
+        createdBy: lembagaKonservasi.createdBy,
+        updatedAt: lembagaKonservasi.updatedAt,
+      }).from(lembagaKonservasi).where(eq(lembagaKonservasi.statusVerifikasi, "pending")),
     ]);
 
     // Ambil semua user sekaligus untuk mapping nama inputor
-    // userMap berisi { id: nama } dari tabel users
-    // Nama user bidang_wilayah sudah sesuai: "Bidang KSDA I Bogor", dll
     const allUsers = await db.select({ id: users.id, nama: users.nama }).from(users);
     const userMap: Record<number, string> = {};
     allUsers.forEach(u => { userMap[u.id] = u.nama; });
 
-    const referensiMapped = referensiPending.map((r) => {
-      const pendingChanges = r.pendingChanges as Record<string, unknown> | null;
-      // Prioritaskan diajukanOleh di pendingChanges (kasus bidang_wilayah ngedit
-      // data milik admin_pusat). Fallback ke createdBy.
-      const inputorId = getDiajukanOleh(pendingChanges, r.createdBy);
-      const namaInputor = inputorId ? userMap[inputorId] ?? null : null;
+    const mapItem = (
+      item: Record<string, unknown>,
+      tabelTarget: TabelTarget
+    ) => {
+      const pendingChanges = item.pendingChanges as Record<string, unknown> | null;
+      const inputorId = getDiajukanOleh(pendingChanges, item.createdBy as number | null);
       return {
-        ...r,
-        tabelTarget: "referensi_tsl" as const,
+        ...item,
+        tabelTarget,
         jenisPengajuan: getJenisPengajuan(pendingChanges),
-        namaInputor,
+        namaInputor: inputorId ? userMap[inputorId] ?? null : null,
       };
-    });
+    };
 
-    const penangkaranMapped = penangkaranPending.map((p) => {
-      const pendingChanges = p.pendingChanges as Record<string, unknown> | null;
-      const inputorId = getDiajukanOleh(pendingChanges, p.createdBy);
-      const namaInputor = inputorId ? userMap[inputorId] ?? null : null;
-      return {
-        ...p,
-        tabelTarget: "penangkaran" as const,
-        jenisPengajuan: getJenisPengajuan(pendingChanges),
-        namaInputor,
-      };
-    });
+    const referensiMapped = referensiPending.map(r => mapItem(r as Record<string, unknown>, "referensi_tsl"));
+    const penangkaranMapped = penangkaranPending.map(p => mapItem(p as Record<string, unknown>, "penangkaran"));
+    const dnMapped = pengedaranDnPending.map(p => mapItem(p as Record<string, unknown>, "pengedaran_dalam_negeri"));
+    const lnMapped = pengedaranLnPending.map(p => mapItem(p as Record<string, unknown>, "pengedaran_luar_negeri"));
+    const lembagaMapped = lembagaPending.map(p => mapItem(p as Record<string, unknown>, "lembaga_konservasi"));
+
+    const total =
+      referensiMapped.length +
+      penangkaranMapped.length +
+      dnMapped.length +
+      lnMapped.length +
+      lembagaMapped.length;
 
     res.status(200).json({
       data: {
         referensi_tsl: referensiMapped,
         penangkaran: penangkaranMapped,
+        pengedaran_dalam_negeri: dnMapped,
+        pengedaran_luar_negeri: lnMapped,
+        lembaga_konservasi: lembagaMapped,
       },
-      total: referensiMapped.length + penangkaranMapped.length,
+      total,
     });
   } catch (error) {
     return handleError(res, error, "getDataPending", "Gagal mengambil data pending");
@@ -224,7 +286,13 @@ export async function getDataPending(_req: AuthRequest, res: Response) {
 
 export async function getDataApproved(_req: AuthRequest, res: Response) {
   try {
-    const [referensiApproved, penangkaranApproved] = await Promise.all([
+    const [
+      referensiApproved,
+      penangkaranApproved,
+      dnApproved,
+      lnApproved,
+      lembagaApproved,
+    ] = await Promise.all([
       db.select({
         id: referensiTsl.id,
         namaDaerah: referensiTsl.namaDaerah,
@@ -241,14 +309,48 @@ export async function getDataApproved(_req: AuthRequest, res: Response) {
         createdBy: penangkaran.createdBy,
         updatedAt: penangkaran.updatedAt,
       }).from(penangkaran).where(eq(penangkaran.statusVerifikasi, "disetujui")),
+
+      db.select({
+        id: pengedaranDalamNegeri.id,
+        namaPengedaran: pengedaranDalamNegeri.namaPengedaran,
+        statusVerifikasi: pengedaranDalamNegeri.statusVerifikasi,
+        createdBy: pengedaranDalamNegeri.createdBy,
+        updatedAt: pengedaranDalamNegeri.updatedAt,
+      }).from(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.statusVerifikasi, "disetujui")),
+
+      db.select({
+        id: pengedaranLuarNegeri.id,
+        namaPengedaran: pengedaranLuarNegeri.namaPengedaran,
+        statusVerifikasi: pengedaranLuarNegeri.statusVerifikasi,
+        createdBy: pengedaranLuarNegeri.createdBy,
+        updatedAt: pengedaranLuarNegeri.updatedAt,
+      }).from(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.statusVerifikasi, "disetujui")),
+
+      db.select({
+        id: lembagaKonservasi.id,
+        namaLembaga: lembagaKonservasi.namaLembaga,
+        statusVerifikasi: lembagaKonservasi.statusVerifikasi,
+        createdBy: lembagaKonservasi.createdBy,
+        updatedAt: lembagaKonservasi.updatedAt,
+      }).from(lembagaKonservasi).where(eq(lembagaKonservasi.statusVerifikasi, "disetujui")),
     ]);
+
+    const total =
+      referensiApproved.length +
+      penangkaranApproved.length +
+      dnApproved.length +
+      lnApproved.length +
+      lembagaApproved.length;
 
     res.status(200).json({
       data: {
         referensi_tsl: referensiApproved.map(r => ({ ...r, tabelTarget: "referensi_tsl" as const })),
         penangkaran: penangkaranApproved.map(p => ({ ...p, tabelTarget: "penangkaran" as const })),
+        pengedaran_dalam_negeri: dnApproved.map(p => ({ ...p, tabelTarget: "pengedaran_dalam_negeri" as const })),
+        pengedaran_luar_negeri: lnApproved.map(p => ({ ...p, tabelTarget: "pengedaran_luar_negeri" as const })),
+        lembaga_konservasi: lembagaApproved.map(p => ({ ...p, tabelTarget: "lembaga_konservasi" as const })),
       },
-      total: referensiApproved.length + penangkaranApproved.length,
+      total,
     });
   } catch (error) {
     return handleError(res, error, "getDataApproved", "Gagal mengambil data approved");
