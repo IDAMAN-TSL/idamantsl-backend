@@ -33,13 +33,17 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "seed": "tsx db/seed.ts",
+    "migrate": "tsx db/migrate.ts",
     "test": "cross-env NODE_ENV=test jest --forceExit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "overrides": {
-    "path-to-regexp": "8.2.0"
+    "path-to-regexp": "8.2.0",
+    "router": {
+      "path-to-regexp": "8.2.0"
+    }
   },
   "dependencies": {
     "@azure/storage-blob": "^12.31.0",

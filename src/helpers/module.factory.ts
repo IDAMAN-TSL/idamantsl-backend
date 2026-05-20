@@ -21,10 +21,7 @@ import { AuthRequest } from "../middlewares/auth.middleware";
 import { isNotOwner, bulkDeleteHandler, handleError } from "./controller.helpers";
 import { uploadFile, deleteFile } from "./azure-storage";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyTable = any;
-
-// ─── relasi yang dimuat untuk GET ────────────────────────────────────────────
 
 const withRelations = {
     bidangWilayah: true,

@@ -2,7 +2,6 @@ node_modules/
 .env
 coverage/
 dist/
-drizzle/
 .scannerwork/
 .vscode/
 .DS_Store
