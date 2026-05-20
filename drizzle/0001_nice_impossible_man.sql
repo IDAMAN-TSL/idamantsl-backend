@@ -1,0 +1,21 @@
+ALTER TABLE "pengedaran_dalam_negeri" ADD COLUMN "file_sk" text;--> statement-breakpoint
+ALTER TABLE "pengedaran_dalam_negeri" ADD COLUMN "status_perlindungan_nasional" "status_perlindungan_nasional";--> statement-breakpoint
+ALTER TABLE "pengedaran_dalam_negeri" ADD COLUMN "status_cites" "status_cites";--> statement-breakpoint
+ALTER TABLE "pengedaran_dalam_negeri" ADD COLUMN "status_iucn" "status_iucn";--> statement-breakpoint
+ALTER TABLE "pengedaran_dalam_negeri" ADD COLUMN "jantan" integer;--> statement-breakpoint
+ALTER TABLE "pengedaran_dalam_negeri" ADD COLUMN "betina" integer;--> statement-breakpoint
+ALTER TABLE "pengedaran_dalam_negeri" ADD COLUMN "pending_changes" json;--> statement-breakpoint
+ALTER TABLE "pengedaran_luar_negeri" ADD COLUMN "file_sk" text;--> statement-breakpoint
+ALTER TABLE "pengedaran_luar_negeri" ADD COLUMN "status_perlindungan_nasional" "status_perlindungan_nasional";--> statement-breakpoint
+ALTER TABLE "pengedaran_luar_negeri" ADD COLUMN "status_cites" "status_cites";--> statement-breakpoint
+ALTER TABLE "pengedaran_luar_negeri" ADD COLUMN "status_iucn" "status_iucn";--> statement-breakpoint
+ALTER TABLE "pengedaran_luar_negeri" ADD COLUMN "jantan" integer;--> statement-breakpoint
+ALTER TABLE "pengedaran_luar_negeri" ADD COLUMN "betina" integer;--> statement-breakpoint
+ALTER TABLE "pengedaran_luar_negeri" ADD COLUMN "pending_changes" json;--> statement-breakpoint
+ALTER TABLE "lembaga_konservasi" ADD COLUMN "file_sk" text;--> statement-breakpoint
+ALTER TABLE "lembaga_konservasi" ADD COLUMN "status_perlindungan_nasional" "status_perlindungan_nasional";--> statement-breakpoint
+ALTER TABLE "lembaga_konservasi" ADD COLUMN "status_cites" "status_cites";--> statement-breakpoint
+ALTER TABLE "lembaga_konservasi" ADD COLUMN "status_iucn" "status_iucn";--> statement-breakpoint
+ALTER TABLE "lembaga_konservasi" ADD COLUMN "jantan" integer;--> statement-breakpoint
+ALTER TABLE "lembaga_konservasi" ADD COLUMN "betina" integer;--> statement-breakpoint
+ALTER TABLE "lembaga_konservasi" ADD COLUMN "pending_changes" json;

@@ -19,16 +19,6 @@ type TableWithPendingApproval = TableWithIdAndCreatedBy & {
   updatedAt: import("drizzle-orm/pg-core").PgColumn;
 };
 
-// ─── isNotOwner ───────────────────────────────────────────────────────────────
-//
-// Aturan baru:
-// - admin_pusat       → boleh semua (return false)
-// - bidang_wilayah    → boleh menginisiasi perubahan pada data MANAPUN
-//                        (perubahan tetap masuk antrean approval), jadi pengecekan
-//                        ownership dimatikan supaya tidak menghalangi UI/controller
-//                        memproses request.
-// - role lain         → diblokir kalau bukan pemilik (perilaku lama).
-
 export const isNotOwner = (
   role: string | undefined,
   createdBy: number | null,
@@ -38,16 +28,6 @@ export const isNotOwner = (
   if (role === "bidang_wilayah") return false;
   return createdBy !== userId;
 };
-
-// ─── bulkDeleteHandler ────────────────────────────────────────────────────────
-// Digunakan oleh penangkaran dan referensi-tsl (dan tabel lain di masa depan)
-//
-// Aturan:
-// - admin_pusat       → hard delete langsung.
-// - bidang_wilayah    → soft delete: status diubah jadi "pending" dan
-//                        pendingChanges diisi { _action: "delete", diajukanOleh }.
-// - role lain         → ownership check seperti sebelumnya.
-
 type FindByIdFn<T> = (id: number) => Promise<T | null | undefined>;
 
 export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
@@ -55,7 +35,7 @@ export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
   res: Response,
   table: TableWithPendingApproval,
   findById: FindByIdFn<T>,
-  entityName: string // e.g. "penangkaran" | "referensi TSL"
+  entityName: string 
 ): Promise<Response> {
   const { ids } = req.body;
 
