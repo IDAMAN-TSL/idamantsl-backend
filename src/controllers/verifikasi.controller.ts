@@ -81,6 +81,26 @@ const TABLE_REGISTRY: Partial<Record<TabelTarget, TableDef>> = {
 
 const VALID_TABEL = Object.keys(TABLE_REGISTRY) as TabelTarget[];
 
+// ─── checkReferensiDependencies ──────────────────────────────────────────────
+// Cek apakah referensi TSL masih direferensikan oleh tabel lain.
+
+async function checkReferensiDependencies(tslId: number): Promise<string[] | null> {
+  const [pk, dn, ln, lk] = await Promise.all([
+    db.select({ id: penangkaran.id }).from(penangkaran).where(eq(penangkaran.tslId, tslId)).limit(1),
+    db.select({ id: pengedaranDalamNegeri.id }).from(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.tslId, tslId)).limit(1),
+    db.select({ id: pengedaranLuarNegeri.id }).from(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.tslId, tslId)).limit(1),
+    db.select({ id: lembagaKonservasi.id }).from(lembagaKonservasi).where(eq(lembagaKonservasi.tslId, tslId)).limit(1),
+  ]);
+
+  const deps: string[] = [];
+  if (pk.length > 0) deps.push("Penangkaran");
+  if (dn.length > 0) deps.push("Pengedaran Dalam Negeri");
+  if (ln.length > 0) deps.push("Pengedaran Luar Negeri");
+  if (lk.length > 0) deps.push("Lembaga Konservasi");
+
+  return deps.length > 0 ? deps : null;
+}
+
 function getTableDef(tabel: TabelTarget): TableDef {
   const def = TABLE_REGISTRY[tabel];
   if (!def) throw new Error(`Tabel "${tabel}" tidak terdaftar di registry`);
@@ -385,6 +405,18 @@ export async function approveData(req: AuthRequest, res: Response) {
     const diajukanOleh = getDiajukanOleh(pendingChanges, (record.createdBy as number | null) ?? null);
 
     if (isDeleteRequest) {
+      // Cek dependensi khusus referensi_tsl sebelum benar-benar hapus
+      if (tabelTarget === "referensi_tsl") {
+        const deps = await checkReferensiDependencies(Number(targetId));
+        if (deps) {
+          res.status(409).json({
+            message: `Tidak dapat menyetujui penghapusan karena referensi TSL masih digunakan oleh: ${deps.join(", ")}. Hapus atau ubah data terkait terlebih dahulu.`,
+            dependencies: deps,
+          });
+          return;
+        }
+      }
+
       await tableDef.delete(Number(targetId));
       await insertVerifikasiLog(
         tabelTarget,

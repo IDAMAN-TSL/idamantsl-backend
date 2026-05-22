@@ -37,7 +37,7 @@ export const penangkaran = pgTable("penangkaran", {
 
   // Relasi ke referensi TSL
   tslId: integer("tsl_id").references(() => referensiTsl.id),
-  
+
   statusPerlindunganNasional: statusPerlindunganNasionalEnum("status_perlindungan_nasional"),
   statusCites: statusCitesEnum("status_cites"),
   statusIucn: statusIucnEnum("status_iucn"),
