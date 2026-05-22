@@ -1,39 +1,12 @@
 import { Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../../db";
-import {
-  referensiTsl,
-  users,
-  penangkaran,
-  pengedaranDalamNegeri,
-  pengedaranLuarNegeri,
-  lembagaKonservasi,
-} from "../../db/schema";
+import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { bulkDeleteHandler, handleError } from "../helpers/controller.helpers";
+import { checkReferensiDependencies } from "../helpers/referensi-deps";
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
-
-// ─── checkTslDependencies ─────────────────────────────────────────────────────
-// Cek apakah referensi TSL dengan id tertentu masih direferensikan oleh
-// tabel lain. Return nama tabel yang masih pakai, atau null kalau aman.
-
-async function checkTslDependencies(tslId: number): Promise<string[] | null> {
-  const [pk, dn, ln, lk] = await Promise.all([
-    db.select({ id: penangkaran.id }).from(penangkaran).where(eq(penangkaran.tslId, tslId)).limit(1),
-    db.select({ id: pengedaranDalamNegeri.id }).from(pengedaranDalamNegeri).where(eq(pengedaranDalamNegeri.tslId, tslId)).limit(1),
-    db.select({ id: pengedaranLuarNegeri.id }).from(pengedaranLuarNegeri).where(eq(pengedaranLuarNegeri.tslId, tslId)).limit(1),
-    db.select({ id: lembagaKonservasi.id }).from(lembagaKonservasi).where(eq(lembagaKonservasi.tslId, tslId)).limit(1),
-  ]);
-
-  const deps: string[] = [];
-  if (pk.length > 0) deps.push("Penangkaran");
-  if (dn.length > 0) deps.push("Pengedaran Dalam Negeri");
-  if (ln.length > 0) deps.push("Pengedaran Luar Negeri");
-  if (lk.length > 0) deps.push("Lembaga Konservasi");
-
-  return deps.length > 0 ? deps : null;
-}
 
 // ─── findReferensiById ────────────────────────────────────────────────────────
 
@@ -278,7 +251,7 @@ export async function deleteReferensi(req: AuthRequest, res: Response) {
     }
 
     // Cek dependensi sebelum hapus/ajukan hapus
-    const deps = await checkTslDependencies(id);
+    const deps = await checkReferensiDependencies(id);
     if (deps) {
       res.status(409).json({
         message: `Tidak dapat menghapus referensi TSL ini karena masih digunakan oleh: ${deps.join(", ")}. Hapus atau ubah data terkait terlebih dahulu.`,
@@ -329,7 +302,7 @@ export const bulkDeleteReferensi = async (req: AuthRequest, res: Response) => {
     // Cek dependensi untuk setiap ID
     const blocked: { id: number; deps: string[] }[] = [];
     for (const id of numericIds) {
-      const deps = await checkTslDependencies(id);
+      const deps = await checkReferensiDependencies(id);
       if (deps) blocked.push({ id, deps });
     }
 

@@ -870,5 +870,29 @@ describe("Verifikasi Endpoints", () => {
 
       expect(res.status).toBe(200);
     });
+
+    it("409 - approve hapus referensi_tsl gagal karena masih direferensikan", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue(mockAdminUser);
+      // find record → pending delete
+      const findChain = mockSelectLimitChain([mockReferensiPendingHapus]);
+      // dep check → ADA dependensi di penangkaran
+      const depFoundChain = mockSelectLimitChain([{ id: 99 }]);
+      const depEmptyChain = mockSelectLimitChain([]);
+      (mockDb.select as jest.Mock)
+        .mockReturnValueOnce(findChain)
+        .mockReturnValueOnce(depFoundChain)  // penangkaran → ADA
+        .mockReturnValueOnce(depEmptyChain)  // dn
+        .mockReturnValueOnce(depEmptyChain)  // ln
+        .mockReturnValueOnce(depEmptyChain); // lembaga
+
+      const res = await request(app)
+        .post("/api/verifikasi/approve")
+        .set("Authorization", "Bearer mocked_token")
+        .send({ tabelTarget: "referensi_tsl", targetId: 1 });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain("masih digunakan oleh");
+      expect(res.body.dependencies).toContain("Penangkaran");
+    });
   });
 });
