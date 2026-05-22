@@ -11,6 +11,7 @@ import {
   users,
 } from "../../db/schema";
 import { handleError } from "../helpers/controller.helpers";
+import { checkReferensiDependencies } from "../helpers/referensi-deps";
 
 interface AuthUser {
   id: number;
@@ -385,6 +386,18 @@ export async function approveData(req: AuthRequest, res: Response) {
     const diajukanOleh = getDiajukanOleh(pendingChanges, (record.createdBy as number | null) ?? null);
 
     if (isDeleteRequest) {
+      // Cek dependensi khusus referensi_tsl sebelum benar-benar hapus
+      if (tabelTarget === "referensi_tsl") {
+        const deps = await checkReferensiDependencies(Number(targetId));
+        if (deps) {
+          res.status(409).json({
+            message: `Tidak dapat menyetujui penghapusan karena referensi TSL masih digunakan oleh: ${deps.join(", ")}. Hapus atau ubah data terkait terlebih dahulu.`,
+            dependencies: deps,
+          });
+          return;
+        }
+      }
+
       await tableDef.delete(Number(targetId));
       await insertVerifikasiLog(
         tabelTarget,

@@ -4,6 +4,7 @@ import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { bulkDeleteHandler, handleError } from "../helpers/controller.helpers";
+import { checkReferensiDependencies } from "../helpers/referensi-deps";
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
 
@@ -249,6 +250,16 @@ export async function deleteReferensi(req: AuthRequest, res: Response) {
       return;
     }
 
+    // Cek dependensi sebelum hapus/ajukan hapus
+    const deps = await checkReferensiDependencies(id);
+    if (deps) {
+      res.status(409).json({
+        message: `Tidak dapat menghapus referensi TSL ini karena masih digunakan oleh: ${deps.join(", ")}. Hapus atau ubah data terkait terlebih dahulu.`,
+        dependencies: deps,
+      });
+      return;
+    }
+
     if (user.role === "bidang_wilayah") {
       await db
         .update(referensiTsl)
@@ -275,6 +286,37 @@ export async function deleteReferensi(req: AuthRequest, res: Response) {
 
 export const bulkDeleteReferensi = async (req: AuthRequest, res: Response) => {
   try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, message: "ids wajib diisi dan harus berupa array" });
+      return;
+    }
+
+    const numericIds = ids.map(Number).filter((id: number) => !isNaN(id));
+    if (numericIds.length !== ids.length) {
+      res.status(400).json({ success: false, message: "Semua id harus berupa angka" });
+      return;
+    }
+
+    // Cek dependensi untuk setiap ID
+    const blocked: { id: number; deps: string[] }[] = [];
+    for (const id of numericIds) {
+      const deps = await checkReferensiDependencies(id);
+      if (deps) blocked.push({ id, deps });
+    }
+
+    if (blocked.length > 0) {
+      const detail = blocked.map(b => `ID ${b.id} (${b.deps.join(", ")})`).join("; ");
+      res.status(409).json({
+        success: false,
+        message: `Tidak dapat menghapus karena masih digunakan: ${detail}. Hapus atau ubah data terkait terlebih dahulu.`,
+        blocked,
+      });
+      return;
+    }
+
+    // Lanjut ke bulkDeleteHandler biasa (sudah lolos cek dependensi)
     return await bulkDeleteHandler(req, res, referensiTsl, findReferensiById, "referensi TSL");
   } catch (error) {
     return handleError(res, error, "bulkDeleteReferensi");
