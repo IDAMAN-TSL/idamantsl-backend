@@ -85,7 +85,7 @@ async function seedBidangWilayah() {
       email: "bidang3@bbksda.id",
       role: "bidang_wilayah" as const,
       wilayahId: 3,
-    },
+    }
   ];
 
   for (const user of usersData) {

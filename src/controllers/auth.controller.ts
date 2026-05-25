@@ -6,6 +6,7 @@ import { db } from "../../db/index";
 import { users } from "../../db/schema";
 import { randomInt } from "node:crypto";
 import { handleError } from "../helpers/controller.helpers";
+import { sendResetPasswordEmail } from "../helpers/mailer";
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -101,7 +102,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     }
 
     const resetToken = randomInt(100000, 999999).toString();
-    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); 
+    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
     await db
       .update(users)
@@ -112,11 +113,17 @@ export const forgotPassword = async (req: Request, res: Response) => {
       })
       .where(eq(users.id, user.id));
 
+    // Kirim email reset password
+    try {
+      await sendResetPasswordEmail(email, resetToken);
+    } catch (emailError) {
+      console.error("[forgotPassword] Gagal kirim email:", emailError);
+      // Tetap return success agar tidak bocorkan info apakah email terdaftar
+    }
+
     return res.status(200).json({
       success: true,
       message: "Jika email terdaftar, link reset password akan dikirim",
-      // Hapus baris ini di production:
-      devToken: resetToken,
     });
   } catch (error) {
     return handleError(res, error, "forgotPassword");

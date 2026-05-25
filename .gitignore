@@ -11,11 +11,6 @@ coverage/
 
 # Build
 dist/
-
-# Drizzle migration output
-drizzle/
-
-# Sonar
 .scannerwork/
 
 # OS

@@ -1,10 +1,3 @@
-/**
- * build-fields.test.ts
- *
- * Unit test untuk buildPengedaranFields & buildLembagaFields.
- * Ini pure functions, tidak butuh supertest/db mock.
- */
-
 import { buildPengedaranFields, buildLembagaFields } from "../src/helpers/build-fields";
 
 describe("buildPengedaranFields", () => {
