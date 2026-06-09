@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../db/index";
-import { users } from "../../db/schema";
+import { users, notifikasi } from "../../db/schema";
 import { randomInt } from "node:crypto";
 import { handleError } from "../helpers/controller.helpers";
 import { sendResetPasswordEmail } from "../helpers/mailer";
@@ -44,9 +44,10 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    const unreadNotifications = await db.query.notifikasi.findMany({
-      where: (notifikasi, { and, eq }) => and(eq(notifikasi.userId, user.id), eq(notifikasi.status, "unread")),
-    });
+    const unreadNotifications = await db
+      .select({ id: notifikasi.id })
+      .from(notifikasi)
+      .where(and(eq(notifikasi.userId, user.id), eq(notifikasi.status, "unread")));
     const realUnreadCount = unreadNotifications.length;
 
     const token = jwt.sign(
