@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import cors from "cors";
 import authRoutes from "./src/routes/auth.routes";
 import penangkaranRoutes from "./src/routes/penangkaran.routes";
 import pengedaranDnRoutes from "./src/routes/pengedaran-dn.routes";
