@@ -140,7 +140,6 @@ export const handleError = (
   context: string,
   customMessage: string = "Terjadi kesalahan server"
 ) => {
-  // Drizzle membungkus error asli di dalam properti 'cause' (kalau ada)
   const actualError = (error as any)?.cause || error;
   const dbError = actualError as { code?: string; constraint?: string; detail?: string };
 
