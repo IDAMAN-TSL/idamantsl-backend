@@ -18,8 +18,9 @@ import { Response } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db } from "../../db";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { isNotOwner, bulkDeleteHandler, handleError } from "./controller.helpers";
+import { isNotOwner, bulkDeleteHandler, handleError, validateUniqueNomorSk, validateWilayahMapping } from "./controller.helpers";
 import { uploadFile, deleteFile } from "./azure-storage";
+import { validateTslFields } from "./build-fields";
 
 type AnyTable = any;
 
@@ -190,10 +191,26 @@ export function createModuleController(opts: ModuleControllerOptions) {
             }
 
             const statusVerifikasi = req.user?.role === "admin_pusat" ? "disetujui" : "pending";
+            const fields = buildFields(req.body);
+            const wilayahError = validateWilayahMapping(
+                fields.bidangWilayahId as number | null | undefined,
+                fields.seksiWilayahId as number | null | undefined
+            );
+            if (wilayahError) {
+                return res.status(400).json({ success: false, message: wilayahError });
+            }
+            const tslValidationError = validateTslFields(fields);
+            if (tslValidationError) {
+                return res.status(400).json({ success: false, message: tslValidationError });
+            }
+            const nomorSkError = await validateUniqueNomorSk(table, fields.nomorSk);
+            if (nomorSkError) {
+                return res.status(409).json({ success: false, message: nomorSkError });
+            }
 
             const result = (await db
                 .insert(table)
-                .values({ ...buildFields(req.body), fileSk, statusVerifikasi, createdBy: req.user?.id })
+                .values({ ...fields, fileSk, statusVerifikasi, createdBy: req.user?.id })
                 .returning()) as Record<string, unknown>[];
 
             return res.status(201).json({
@@ -224,6 +241,21 @@ export function createModuleController(opts: ModuleControllerOptions) {
                 }
 
                 const fields = buildFields(req.body);
+                const wilayahError = validateWilayahMapping(
+                    fields.bidangWilayahId as number | null | undefined,
+                    fields.seksiWilayahId as number | null | undefined
+                );
+                if (wilayahError) {
+                    return res.status(400).json({ success: false, message: wilayahError });
+                }
+                const tslValidationError = validateTslFields(fields);
+                if (tslValidationError) {
+                    return res.status(400).json({ success: false, message: tslValidationError });
+                }
+                const nomorSkError = await validateUniqueNomorSk(table, fields.nomorSk, id);
+                if (nomorSkError) {
+                    return res.status(409).json({ success: false, message: nomorSkError });
+                }
                 const data = await markPending(id, {
                     ...fields,
                     ...(fileSk !== undefined ? { fileSk } : {}),
@@ -244,10 +276,27 @@ export function createModuleController(opts: ModuleControllerOptions) {
                 fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
             }
 
+            const fields = buildFields(req.body);
+            const wilayahError = validateWilayahMapping(
+                fields.bidangWilayahId as number | null | undefined,
+                fields.seksiWilayahId as number | null | undefined
+            );
+            if (wilayahError) {
+                return res.status(400).json({ success: false, message: wilayahError });
+            }
+            const tslValidationError = validateTslFields(fields);
+            if (tslValidationError) {
+                return res.status(400).json({ success: false, message: tslValidationError });
+            }
+            const nomorSkError = await validateUniqueNomorSk(table, fields.nomorSk, id);
+            if (nomorSkError) {
+                return res.status(409).json({ success: false, message: nomorSkError });
+            }
+
             const result = (await db
                 .update(table)
                 .set({
-                    ...buildFields(req.body),
+                    ...fields,
                     ...("fileSk" in req.body || req.file ? { fileSk } : {}),
                     updatedBy: req.user?.id,
                     updatedAt: new Date(),

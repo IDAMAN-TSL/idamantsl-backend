@@ -7,6 +7,8 @@ import { bulkDeleteHandler, handleError } from "../helpers/controller.helpers";
 import { checkReferensiDependencies } from "../helpers/referensi-deps";
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
+const TAXONOMY_FIELDS = ["kingdom", "divisi", "kelas", "ordo", "famili", "genus", "spesies"] as const;
+const TAXONOMY_PATTERN = /^[A-Za-z\s]+$/;
 
 // ─── findReferensiById ────────────────────────────────────────────────────────
 
@@ -33,6 +35,18 @@ function buildReferensiFields(body: Request["body"]) {
     famili, genus, spesies, statusPerlindunganNasional,
     statusCites, statusIucn, catatanVerifikasi,
   };
+}
+
+function validateTaxonomyFields(fields: ReturnType<typeof buildReferensiFields>) {
+  for (const field of TAXONOMY_FIELDS) {
+    const value = fields[field];
+    if (value === undefined || value === null || value === "") continue;
+    if (typeof value !== "string" || !TAXONOMY_PATTERN.test(value)) {
+      return `${field} harus berupa huruf`;
+    }
+  }
+
+  return null;
 }
 
 // ─── SELECT_FIELDS ────────────────────────────────────────────────────────────
@@ -140,6 +154,12 @@ export async function createReferensi(req: AuthRequest, res: Response) {
       return;
     }
 
+    const taxonomyError = validateTaxonomyFields(fields);
+    if (taxonomyError) {
+      res.status(400).json({ message: taxonomyError });
+      return;
+    }
+
     const statusVerifikasi = user.role === "admin_pusat" ? "disetujui" : "pending";
 
     const [newData] = await db
@@ -178,6 +198,12 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
         return;
       }
 
+      const taxonomyError = validateTaxonomyFields(fields);
+      if (taxonomyError) {
+        res.status(400).json({ message: taxonomyError });
+        return;
+      }
+
       const [updated] = await db
         .update(referensiTsl)
         .set({
@@ -201,6 +227,12 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
 
     if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
       res.status(400).json({ message: "Jenis TSL tidak valid" });
+      return;
+    }
+
+    const taxonomyError = validateTaxonomyFields(fields);
+    if (taxonomyError) {
+      res.status(400).json({ message: taxonomyError });
       return;
     }
 

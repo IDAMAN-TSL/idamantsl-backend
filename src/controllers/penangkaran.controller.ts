@@ -3,8 +3,9 @@ import { eq, desc, type InferInsertModel } from "drizzle-orm";
 import { db } from "../../db/index";
 import { penangkaran } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { isNotOwner, bulkDeleteHandler, handleError } from "../helpers/controller.helpers";
+import { isNotOwner, bulkDeleteHandler, handleError, validateUniqueNomorSk, validateWilayahMapping } from "../helpers/controller.helpers";
 import { deleteFile, uploadFile } from "../helpers/azure-storage";
+import { normalizeTslFields, validateTslFields } from "../helpers/build-fields";
 
 type PenangkaranInsert = InferInsertModel<typeof penangkaran>;
 
@@ -22,7 +23,7 @@ const buildPenangkaranFields = (body: Record<string, unknown>) => ({
   ...("alamatKantor" in body && { alamatKantor: (body.alamatKantor as string) ?? null }),
   ...("alamatPenangkaran" in body && { alamatPenangkaran: (body.alamatPenangkaran as string) ?? null }),
   ...("koordinatLokasi" in body && { koordinatLokasi: (body.koordinatLokasi as string) ?? null }),
-  ...("tslId" in body && { tslId: body.tslId ? Number(body.tslId) : null }),
+  ...normalizeTslFields(body),
   ...("statusPerlindunganNasional" in body && { statusPerlindunganNasional: (body.statusPerlindunganNasional as PenangkaranInsert["statusPerlindunganNasional"]) ?? null }),
   ...("statusCites" in body && { statusCites: (body.statusCites as PenangkaranInsert["statusCites"]) ?? null }),
   ...("statusIucn" in body && { statusIucn: (body.statusIucn as PenangkaranInsert["statusIucn"]) ?? null }),
@@ -146,10 +147,23 @@ export const createPenangkaran = async (req: AuthRequest, res: Response) => {
       fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
     }
     const statusVerifikasi = req.user?.role === "admin_pusat" ? "disetujui" : "pending";
+    const fields = buildPenangkaranFields(req.body);
+    const wilayahError = validateWilayahMapping(fields.bidangWilayahId, fields.seksiWilayahId);
+    if (wilayahError) {
+      return res.status(400).json({ success: false, message: wilayahError });
+    }
+    const tslValidationError = validateTslFields(fields);
+    if (tslValidationError) {
+      return res.status(400).json({ success: false, message: tslValidationError });
+    }
+    const nomorSkError = await validateUniqueNomorSk(penangkaran, fields.nomorSk);
+    if (nomorSkError) {
+      return res.status(409).json({ success: false, message: nomorSkError });
+    }
 
     const [data] = await db
       .insert(penangkaran)
-      .values({ ...buildPenangkaranFields(req.body), fileSk, statusVerifikasi, createdBy: req.user?.id })
+      .values({ ...fields, fileSk, statusVerifikasi, createdBy: req.user?.id })
       .returning();
 
     return res.status(201).json({
@@ -189,6 +203,18 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
       }
 
       const fields = buildPenangkaranFields(req.body);
+      const wilayahError = validateWilayahMapping(fields.bidangWilayahId, fields.seksiWilayahId);
+      if (wilayahError) {
+        return res.status(400).json({ success: false, message: wilayahError });
+      }
+      const tslValidationError = validateTslFields(fields);
+      if (tslValidationError) {
+        return res.status(400).json({ success: false, message: tslValidationError });
+      }
+      const nomorSkError = await validateUniqueNomorSk(penangkaran, fields.nomorSk, Number(id));
+      if (nomorSkError) {
+        return res.status(409).json({ success: false, message: nomorSkError });
+      }
       const data = await markPenangkaranPending(Number(id), {
         ...fields,
         ...(fileSk !== undefined ? { fileSk } : {}),
@@ -209,10 +235,24 @@ export const updatePenangkaran = async (req: AuthRequest, res: Response) => {
       fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
     }
 
+    const fields = buildPenangkaranFields(req.body);
+    const wilayahError = validateWilayahMapping(fields.bidangWilayahId, fields.seksiWilayahId);
+    if (wilayahError) {
+      return res.status(400).json({ success: false, message: wilayahError });
+    }
+    const tslValidationError = validateTslFields(fields);
+    if (tslValidationError) {
+      return res.status(400).json({ success: false, message: tslValidationError });
+    }
+    const nomorSkError = await validateUniqueNomorSk(penangkaran, fields.nomorSk, Number(id));
+    if (nomorSkError) {
+      return res.status(409).json({ success: false, message: nomorSkError });
+    }
+
     const [data] = await db
       .update(penangkaran)
       .set({
-        ...buildPenangkaranFields(req.body),
+        ...fields,
         ...("fileSk" in req.body || req.file ? { fileSk } : {}),
         updatedBy: req.user?.id,
         updatedAt: new Date(),

@@ -36,6 +36,13 @@ const mockWilayahSeksi = [
   { id: 5, namaWilayah: "Seksi Wilayah II", tipeWilayah: "seksi", nomorWilayah: 2 },
 ];
 
+const mockSeksiMapping = [
+  { id: 4, namaWilayah: "Serang", tipeWilayah: "seksi", nomorWilayah: "I" },
+  { id: 5, namaWilayah: "Bogor", tipeWilayah: "seksi", nomorWilayah: "II" },
+  { id: 6, namaWilayah: "Soreang", tipeWilayah: "seksi", nomorWilayah: "III" },
+  { id: 7, namaWilayah: "Purwakarta", tipeWilayah: "seksi", nomorWilayah: "IV" },
+];
+
 const mockAllWilayah = [...mockWilayahBidang, ...mockWilayahSeksi];
 
 function mockJwtVerify() {
@@ -50,6 +57,26 @@ function mockSelect(returnValue: unknown) {
   };
   (db.select as jest.Mock).mockReturnValue(chain);
   return chain;
+}
+
+function mockSelectBidangThenSeksi(bidangReturn: unknown[], seksiReturn: unknown[]) {
+  const bidangChain = {
+    from: jest.fn().mockReturnValue({
+      where: jest.fn().mockReturnValue({
+        limit: jest.fn().mockResolvedValue(bidangReturn),
+      }),
+    }),
+  };
+  const seksiChain = {
+    from: jest.fn().mockReturnValue({
+      where: jest.fn().mockReturnValue({
+        orderBy: jest.fn().mockResolvedValue(seksiReturn),
+      }),
+    }),
+  };
+  (db.select as jest.Mock)
+    .mockReturnValueOnce(bidangChain)
+    .mockReturnValueOnce(seksiChain);
 }
 
 describe("Wilayah Controller", () => {
@@ -174,6 +201,53 @@ describe("Wilayah Controller", () => {
 
       expect(res.status).toBe(500);
       expect(res.body.message).toBe("Gagal mengambil data wilayah seksi");
+    });
+
+    it("200 - filter seksi berdasarkan nama bidang Bogor", async () => {
+      mockSelect(mockSeksiMapping);
+
+      const res = await request(app)
+        .get("/api/wilayah/seksi?bidang=bogor")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((item: { namaWilayah: string }) => item.namaWilayah)).toEqual(["Serang", "Bogor"]);
+    });
+
+    it("200 - filter seksi berdasarkan bidangWilayahId", async () => {
+      mockSelectBidangThenSeksi(
+        [{ id: 2, namaWilayah: "Soreang", tipeWilayah: "bidang" }],
+        mockSeksiMapping
+      );
+
+      const res = await request(app)
+        .get("/api/wilayah/seksi?bidangWilayahId=2")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((item: { namaWilayah: string }) => item.namaWilayah)).toEqual(["Soreang", "Purwakarta"]);
+    });
+
+    it("404 - bidangWilayahId tidak ditemukan", async () => {
+      mockSelectBidangThenSeksi([], mockSeksiMapping);
+
+      const res = await request(app)
+        .get("/api/wilayah/seksi?bidangWilayahId=999")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(404);
+      expect(res.body.message).toBe("Bidang wilayah tidak ditemukan");
+    });
+
+    it("400 - nama bidang tidak valid", async () => {
+      mockSelect(mockSeksiMapping);
+
+      const res = await request(app)
+        .get("/api/wilayah/seksi?bidang=tidak-valid")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Bidang wilayah tidak valid");
     });
   });
 });

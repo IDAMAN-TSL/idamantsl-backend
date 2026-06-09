@@ -15,6 +15,13 @@
       "when": 1779107664041,
       "tag": "0001_nice_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780991632079,
+      "tag": "0002_mysterious_loa",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,9 @@
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/dist/"
+    ],
     "moduleNameMapper": {
       "^uuid$": "<rootDir>/__mocks__/uuid.ts"
     },

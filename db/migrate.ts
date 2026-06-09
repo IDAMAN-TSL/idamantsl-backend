@@ -65,7 +65,15 @@ async function main() {
             for (const stmt of statements) {
                 const trimmed = stmt.trim();
                 if (trimmed) {
-                    await client.query(trimmed);
+                    try {
+                        await client.query(trimmed);
+                    } catch (error: any) {
+                        if (error.code === "42P07" || error.code === "42710" || error.code === "42701") {
+                            console.log(`⚠️  Object sudah ada (${error.message}), melanjutkan...`);
+                        } else {
+                            throw error;
+                        }
+                    }
                 }
             }
 
@@ -80,13 +88,8 @@ async function main() {
 
         console.log("\n✅ Semua migrasi selesai!");
     } catch (error: any) {
-        // Kalau error karena "already exists", skip saja
-        if (error.code === "42P07" || error.code === "42710") {
-            console.log(`⚠️  Object sudah ada (${error.message}), melanjutkan...`);
-        } else {
-            console.error("❌ Migrasi gagal:", error.message);
-            process.exit(1);
-        }
+        console.error("❌ Migrasi gagal:", error.message);
+        process.exit(1);
     } finally {
         client.release();
         await pool.end();

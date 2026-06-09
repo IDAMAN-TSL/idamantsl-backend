@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, json } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, json, unique } from "drizzle-orm/pg-core";
 import {
   statusVerifikasiEnum,
   statusCitesEnum,
@@ -8,6 +8,7 @@ import {
 import { wilayah } from "./wilayah";
 import { referensiTsl } from "./referensi-tsl";
 import { users } from "./users";
+import type { TslItem } from "./penangkaran";
 
 export const lembagaKonservasi = pgTable("lembaga_konservasi", {
   id: serial("id").primaryKey(),
@@ -36,6 +37,8 @@ export const lembagaKonservasi = pgTable("lembaga_konservasi", {
 
   // Relasi ke referensi TSL
   tslId: integer("tsl_id").references(() => referensiTsl.id),
+  jumlahTsl: integer("jumlah_tsl").default(1),
+  tslItems: json("tsl_items").$type<TslItem[]>(),
 
   // Status perlindungan
   statusPerlindunganNasional: statusPerlindunganNasionalEnum("status_perlindungan_nasional"),
@@ -56,4 +59,6 @@ export const lembagaKonservasi = pgTable("lembaga_konservasi", {
   updatedBy: integer("updated_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  nomorSkUnique: unique("lembaga_konservasi_nomor_sk_unique").on(table.nomorSk),
+}));
