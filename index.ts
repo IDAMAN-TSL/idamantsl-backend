@@ -20,7 +20,11 @@ const PORT = process.env.PORT;
 app.disable("x-powered-by");
 app.use(
   cors({
-    origin: true,
+    origin: [
+      "https://idamantsljabar.site",
+      "https://www.idamantsljabar.site",
+      "http://localhost:3000",
+    ],
     credentials: true,
   })
 );
