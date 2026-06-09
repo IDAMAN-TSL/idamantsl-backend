@@ -12,6 +12,11 @@ jest.mock("../db/index", () => ({
         findMany: jest.fn().mockResolvedValue([]),
       },
     },
+    select: jest.fn(() => ({
+      from: jest.fn(() => ({
+        where: jest.fn().mockResolvedValue([]),
+      })),
+    })),
     update: jest.fn(() => ({
       set: jest.fn(() => ({
         where: jest.fn(),
