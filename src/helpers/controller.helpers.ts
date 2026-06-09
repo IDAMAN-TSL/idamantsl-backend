@@ -1,11 +1,9 @@
 import { Response } from "express";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { db } from "../../db";
 
 // Gunakan AuthRequest dari middleware agar tipe user konsisten di seluruh app
 import { AuthRequest } from "../middlewares/auth.middleware";
-
-// ─── Tipe generik untuk table Drizzle ─────────────────────────────────────────
 
 type TableWithIdAndCreatedBy = {
   id: import("drizzle-orm/pg-core").PgColumn;
@@ -19,15 +17,42 @@ type TableWithPendingApproval = TableWithIdAndCreatedBy & {
   updatedAt: import("drizzle-orm/pg-core").PgColumn;
 };
 
-export const isNotOwner = (
-  role: string | undefined,
-  createdBy: number | null,
-  userId: number | undefined
-): boolean => {
+export const isNotOwner = (role, createdBy, userId) => {
   if (role === "admin_pusat") return false;
   if (role === "bidang_wilayah") return false;
   return createdBy !== userId;
 };
+
+export const validateId = (idStr: any, res: Response): number | null => {
+  const id = Number(idStr);
+  if (Number.isNaN(id)) {
+    res.status(400).json({ message: "ID tidak valid" });
+    return null;
+  }
+  return id;
+};
+
+export async function validateUniqueNomorSk(
+  table: { id: any; nomorSk: any },
+  nomorSk: unknown,
+  excludeId?: number
+) {
+  if (nomorSk === undefined || nomorSk === null || nomorSk === "") return null;
+
+  const whereClause = excludeId
+    ? and(eq(table.nomorSk, nomorSk as string), ne(table.id, excludeId))
+    : eq(table.nomorSk, nomorSk as string);
+
+  const existing = await db
+    .select({ id: table.id })
+    .from(table as never)
+    .where(whereClause)
+    .limit(1);
+
+  return existing.length > 0
+    ? "Nomor SK sudah terdaftar. Masukkan beberapa referensi TSL dalam satu data SK, bukan membuat nomor SK berulang."
+    : null;
+}
 type FindByIdFn<T> = (id: number) => Promise<T | null | undefined>;
 
 export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
@@ -35,7 +60,7 @@ export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
   res: Response,
   table: TableWithPendingApproval,
   findById: FindByIdFn<T>,
-  entityName: string 
+  entityName: string
 ): Promise<Response> {
   const { ids } = req.body;
 
@@ -47,7 +72,7 @@ export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
     });
   }
 
-  const numericIds = ids.map(Number).filter((id) => !isNaN(id));
+  const numericIds = ids.map(Number).filter((id) => !Number.isNaN(id));
   if (numericIds.length !== ids.length) {
     return res.status(400).json({
       success: false,
@@ -73,7 +98,7 @@ export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
         statusVerifikasi: "pending",
         pendingChanges: { _action: "delete", diajukanOleh: req.user.id } as never,
         updatedAt: new Date(),
-      } as never)
+      })
       .where(inArray(table.id, numericIds));
 
     return res.status(200).json({
@@ -96,10 +121,24 @@ export async function bulkDeleteHandler<T extends { createdBy: number | null }>(
   // admin_pusat (atau pemilik valid) → hard delete
   await db.delete(table as never).where(inArray(table.id, numericIds));
 
+
   return res.status(200).json({
     success: true,
     message: `${numericIds.length} data ${entityName} berhasil dihapus`,
   });
+}
+
+export function validateWilayahMapping(bidangId: number | null | undefined, seksiId: number | null | undefined): string | null {
+  if (!bidangId || !seksiId) return null;
+  const mapping: Record<number, number[]> = {
+    1: [4, 5], // Bogor: Serang, Bogor
+    2: [6, 7], // Soreang: Soreang, Purwakarta
+    3: [8, 9], // Ciamis: Garut, Tasikmalaya
+  };
+  if (!mapping[bidangId]?.includes(seksiId)) {
+    return "Seksi wilayah yang dipilih tidak sesuai dengan bidang wilayah";
+  }
+  return null;
 }
 
 // ─── handleError ──────────────────────────────────────────────────────────────
@@ -110,8 +149,25 @@ export const handleError = (
   context: string,
   customMessage: string = "Terjadi kesalahan server"
 ) => {
-  console.error(`[${context}]`, error);
+  const actualError = (error as any)?.cause || error;
+  const dbError = actualError as { code?: string; constraint?: string; detail?: string };
 
+  if (dbError.code === "23505") {
+    let constraintMessage = "Data duplikat tidak diperbolehkan";
+    
+    if (dbError.constraint?.includes("nama_daerah") || dbError.detail?.includes("nama_daerah")) {
+      constraintMessage = "Nama daerah sudah terdaftar";
+    } else if (dbError.constraint?.includes("nomor_sk") || dbError.detail?.includes("nomor_sk")) {
+      constraintMessage = "Nomor SK sudah terdaftar. Masukkan beberapa referensi TSL dalam satu data SK, bukan membuat nomor SK berulang.";
+    }
+
+    return res.status(409).json({
+      success: false,
+      message: constraintMessage,
+    });
+  }
+
+  console.error(`[${context}] Server Error:`, error);
   return res.status(500).json({
     success: false,
     message: customMessage,

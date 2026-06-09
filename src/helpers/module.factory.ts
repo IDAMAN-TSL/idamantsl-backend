@@ -18,8 +18,9 @@ import { Response } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db } from "../../db";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { isNotOwner, bulkDeleteHandler, handleError } from "./controller.helpers";
+import { isNotOwner, bulkDeleteHandler, handleError, validateUniqueNomorSk, validateWilayahMapping } from "./controller.helpers";
 import { uploadFile, deleteFile } from "./azure-storage";
+import { validateTslFields } from "./build-fields";
 
 type AnyTable = any;
 
@@ -54,6 +55,30 @@ export function createModuleController(opts: ModuleControllerOptions) {
             findFirst: (o: { where: ReturnType<typeof eq> }) => Promise<Record<string, unknown> | undefined>;
         };
         return (await query.findFirst({ where: eq(table.id, id) })) ?? null;
+    }
+
+    // ── validateAndBuildFields ────────────────────────────────────────────────
+    async function validateAndBuildFields(req: AuthRequest, res: Response, id?: number) {
+        const fields = buildFields(req.body);
+        const wilayahError = validateWilayahMapping(
+            fields.bidangWilayahId as number | null | undefined,
+            fields.seksiWilayahId as number | null | undefined
+        );
+        if (wilayahError) {
+            res.status(400).json({ success: false, message: wilayahError });
+            return null;
+        }
+        const tslValidationError = validateTslFields(fields);
+        if (tslValidationError) {
+            res.status(400).json({ success: false, message: tslValidationError });
+            return null;
+        }
+        const nomorSkError = await validateUniqueNomorSk(table, fields.nomorSk, id);
+        if (nomorSkError) {
+            res.status(409).json({ success: false, message: nomorSkError });
+            return null;
+        }
+        return fields;
     }
 
     // ── markPending ───────────────────────────────────────────────────────────
@@ -180,7 +205,7 @@ export function createModuleController(opts: ModuleControllerOptions) {
             if (!namaValue) {
                 return res.status(400).json({
                     success: false,
-                    message: `${namaFieldKey} wajib diisi`,
+                    message: `Nama ${entityName} wajib diisi`,
                 });
             }
 
@@ -190,10 +215,12 @@ export function createModuleController(opts: ModuleControllerOptions) {
             }
 
             const statusVerifikasi = req.user?.role === "admin_pusat" ? "disetujui" : "pending";
+            const fields = await validateAndBuildFields(req, res);
+            if (!fields) return;
 
             const result = (await db
                 .insert(table)
-                .values({ ...buildFields(req.body), fileSk, statusVerifikasi, createdBy: req.user?.id })
+                .values({ ...fields, fileSk, statusVerifikasi, createdBy: req.user?.id })
                 .returning()) as Record<string, unknown>[];
 
             return res.status(201).json({
@@ -223,7 +250,8 @@ export function createModuleController(opts: ModuleControllerOptions) {
                     fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
                 }
 
-                const fields = buildFields(req.body);
+                const fields = await validateAndBuildFields(req, res, id);
+                if (!fields) return;
                 const data = await markPending(id, {
                     ...fields,
                     ...(fileSk !== undefined ? { fileSk } : {}),
@@ -244,10 +272,13 @@ export function createModuleController(opts: ModuleControllerOptions) {
                 fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
             }
 
+            const fields = await validateAndBuildFields(req, res, id);
+            if (!fields) return;
+
             const result = (await db
                 .update(table)
                 .set({
-                    ...buildFields(req.body),
+                    ...fields,
                     ...("fileSk" in req.body || req.file ? { fileSk } : {}),
                     updatedBy: req.user?.id,
                     updatedAt: new Date(),

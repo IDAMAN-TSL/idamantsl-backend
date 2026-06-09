@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, boolean, json } from "drizzle-orm/pg-core";
 import { roleEnum } from "../enums/enum";
 import { wilayah } from "./wilayah";
 
@@ -22,8 +22,11 @@ export const users = pgTable("users", {
   // Untuk fitur forgot password (FR-1.2)
   resetToken: text("reset_token"),
   resetTokenExpiry: timestamp("reset_token_expiry"),
+  passwordHistory: json("password_history").$type<string[]>().default([]),
 
   isActive: boolean("is_active").default(true),
+  statusNotifikasi: boolean("status_notifikasi").default(true),
+  jumlahNotifikasi: integer("jumlah_notifikasi").default(0),
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

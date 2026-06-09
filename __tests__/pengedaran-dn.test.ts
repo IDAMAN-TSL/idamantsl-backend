@@ -224,7 +224,7 @@ describe("Pengedaran Dalam Negeri Endpoints (via module.factory)", () => {
 
             expect(res.status).toBe(400);
             expect(res.body.success).toBe(false);
-            expect(res.body.message).toContain("namaPengedaran wajib diisi");
+            expect(res.body.message).toContain("Nama pengedaran dalam negeri wajib diisi");
         });
 
         it("201 - dengan upload file SK", async () => {

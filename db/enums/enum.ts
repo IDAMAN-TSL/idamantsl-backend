@@ -21,9 +21,15 @@ export const statusVerifikasiEnum = pgEnum("status_verifikasi", [
 ]);
 
 export const statusCitesEnum = pgEnum("status_cites", [
+  "non_apendiks",
   "apendiks_i",
   "apendiks_ii",
   "apendiks_iii",
+]);
+
+export const statusNotifikasiEnum = pgEnum("status_notifikasi", [
+  "unread",
+  "read",
 ]);
 
 export const statusIucnEnum = pgEnum("status_iucn", [

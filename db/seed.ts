@@ -31,12 +31,12 @@ async function seedWilayah() {
     { nomorWilayah: "III", namaWilayah: "Ciamis", alamatWilayah: "Ciamis", tipeWilayah: "bidang" },
 
     // Seksi Wilayah
-    { nomorWilayah: "I", namaWilayah: "Serang", alamatWilayah: "Serang", tipeWilayah: "seksi" },
-    { nomorWilayah: "II", namaWilayah: "Bogor", alamatWilayah: "Bogor", tipeWilayah: "seksi" },
-    { nomorWilayah: "III", namaWilayah: "Soreang", alamatWilayah: "Soreang", tipeWilayah: "seksi" },
-    { nomorWilayah: "IV", namaWilayah: "Purwakarta", alamatWilayah: "Purwakarta", tipeWilayah: "seksi" },
-    { nomorWilayah: "V", namaWilayah: "Garut", alamatWilayah: "Garut", tipeWilayah: "seksi" },
-    { nomorWilayah: "VI", namaWilayah: "Tasikmalaya", alamatWilayah: "Tasikmalaya", tipeWilayah: "seksi" },
+    { nomorWilayah: "I", namaWilayah: "Serang", alamatWilayah: "Serang", tipeWilayah: "seksi", parentWilayahId: 1 },
+    { nomorWilayah: "II", namaWilayah: "Bogor", alamatWilayah: "Bogor", tipeWilayah: "seksi", parentWilayahId: 1 },
+    { nomorWilayah: "III", namaWilayah: "Soreang", alamatWilayah: "Soreang", tipeWilayah: "seksi", parentWilayahId: 2 },
+    { nomorWilayah: "IV", namaWilayah: "Purwakarta", alamatWilayah: "Purwakarta", tipeWilayah: "seksi", parentWilayahId: 2 },
+    { nomorWilayah: "V", namaWilayah: "Garut", alamatWilayah: "Garut", tipeWilayah: "seksi", parentWilayahId: 3 },
+    { nomorWilayah: "VI", namaWilayah: "Tasikmalaya", alamatWilayah: "Tasikmalaya", tipeWilayah: "seksi", parentWilayahId: 3 },
   ]);
 
   console.log("✅ Data wilayah dibuat!");

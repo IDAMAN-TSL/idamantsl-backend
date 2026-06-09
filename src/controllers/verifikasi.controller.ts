@@ -165,6 +165,27 @@ async function findPendingRecord(
   return { record };
 }
 
+// ─── Helper: Ambil record tervalidasi untuk verifikasi ──────────────────────
+
+async function getValidatedPendingRecord(
+  tabelTarget: unknown,
+  targetId: unknown,
+  res: Response
+): Promise<{ record?: Record<string, unknown>; error?: boolean }> {
+  const validationError = validateBaseFields(tabelTarget, targetId);
+  if (validationError) {
+    res.status(400).json({ message: validationError });
+    return { error: true };
+  }
+
+  const result = await findPendingRecord(tabelTarget as TabelTarget, Number(targetId));
+  if ("error" in result) {
+    res.status(result.status).json({ message: result.error });
+    return { error: true };
+  }
+  return { record: result.record };
+}
+
 // ─── Helper: Ambil nama inputor dari users ────────────────────────────────────
 // DEPRECATED: Tidak digunakan lagi, diganti dengan userMap di getDataPending
 
@@ -365,19 +386,9 @@ export async function approveData(req: AuthRequest, res: Response) {
     const user = req.user!;
     const { tabelTarget, targetId, catatan } = req.body;
 
-    const validationError = validateBaseFields(tabelTarget, targetId);
-    if (validationError) {
-      res.status(400).json({ message: validationError });
-      return;
-    }
+    const { record, error } = await getValidatedPendingRecord(tabelTarget, targetId, res);
+    if (error || !record) return;
 
-    const result = await findPendingRecord(tabelTarget, Number(targetId));
-    if ("error" in result) {
-      res.status(result.status).json({ message: result.error });
-      return;
-    }
-
-    const { record } = result;
     const tableDef = getTableDef(tabelTarget);
     const pendingChanges = record.pendingChanges as Record<string, unknown> | null;
     const isDeleteRequest = pendingChanges?._action === "delete";
@@ -442,24 +453,14 @@ export async function tolakData(req: AuthRequest, res: Response) {
     const user = req.user!;
     const { tabelTarget, targetId, catatan } = req.body;
 
-    const validationError = validateBaseFields(tabelTarget, targetId);
-    if (validationError) {
-      res.status(400).json({ message: validationError });
-      return;
-    }
-
     if (!catatan?.trim()) {
       res.status(400).json({ message: "Catatan wajib diisi saat menolak data" });
       return;
     }
 
-    const result = await findPendingRecord(tabelTarget, Number(targetId));
-    if ("error" in result) {
-      res.status(result.status).json({ message: result.error });
-      return;
-    }
+    const { record, error } = await getValidatedPendingRecord(tabelTarget, targetId, res);
+    if (error || !record) return;
 
-    const { record } = result;
     const pendingChanges = record.pendingChanges as Record<string, unknown> | null;
     const jenisPengajuan = getJenisPengajuan(pendingChanges);
 
