@@ -174,20 +174,28 @@ export async function createReferensi(req: AuthRequest, res: Response) {
   }
 }
 
+async function getValidatedExistingReferensi(req: AuthRequest, res: Response) {
+  const id = validateId(req.params.id, res);
+  if (id === null) return null;
+
+  const user = req.user!;
+  const existing = await findReferensiById(id);
+
+  if (!existing) {
+    res.status(404).json({ message: "Referensi TSL tidak ditemukan" });
+    return null;
+  }
+
+  return { id, user, existing };
+}
+
 // ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────────
 
 export async function updateReferensi(req: AuthRequest, res: Response) {
   try {
-    const id = validateId(req.params.id, res);
-    if (id === null) return;
-
-    const user = req.user!;
-    const existing = await findReferensiById(id);
-
-    if (!existing) {
-      res.status(404).json({ message: "Referensi TSL tidak ditemukan" });
-      return;
-    }
+    const validated = await getValidatedExistingReferensi(req, res);
+    if (!validated) return;
+    const { id, user, existing } = validated;
 
     if (user.role === "bidang_wilayah") {
       const fields = buildReferensiFields(req.body);
@@ -256,16 +264,9 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
 
 export async function deleteReferensi(req: AuthRequest, res: Response) {
   try {
-    const id = validateId(req.params.id, res);
-    if (id === null) return;
-
-    const user = req.user!;
-    const existing = await findReferensiById(id);
-
-    if (!existing) {
-      res.status(404).json({ message: "Referensi TSL tidak ditemukan" });
-      return;
-    }
+    const validated = await getValidatedExistingReferensi(req, res);
+    if (!validated) return;
+    const { id, user, existing } = validated;
 
     // Cek dependensi sebelum hapus/ajukan hapus
     const deps = await checkReferensiDependencies(id);

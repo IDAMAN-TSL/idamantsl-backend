@@ -57,6 +57,30 @@ export function createModuleController(opts: ModuleControllerOptions) {
         return (await query.findFirst({ where: eq(table.id, id) })) ?? null;
     }
 
+    // ── validateAndBuildFields ────────────────────────────────────────────────
+    async function validateAndBuildFields(req: AuthRequest, res: Response, id?: number) {
+        const fields = buildFields(req.body);
+        const wilayahError = validateWilayahMapping(
+            fields.bidangWilayahId as number | null | undefined,
+            fields.seksiWilayahId as number | null | undefined
+        );
+        if (wilayahError) {
+            res.status(400).json({ success: false, message: wilayahError });
+            return null;
+        }
+        const tslValidationError = validateTslFields(fields);
+        if (tslValidationError) {
+            res.status(400).json({ success: false, message: tslValidationError });
+            return null;
+        }
+        const nomorSkError = await validateUniqueNomorSk(table, fields.nomorSk, id);
+        if (nomorSkError) {
+            res.status(409).json({ success: false, message: nomorSkError });
+            return null;
+        }
+        return fields;
+    }
+
     // ── markPending ───────────────────────────────────────────────────────────
     async function markPending(
         id: number,
@@ -191,22 +215,8 @@ export function createModuleController(opts: ModuleControllerOptions) {
             }
 
             const statusVerifikasi = req.user?.role === "admin_pusat" ? "disetujui" : "pending";
-            const fields = buildFields(req.body);
-            const wilayahError = validateWilayahMapping(
-                fields.bidangWilayahId as number | null | undefined,
-                fields.seksiWilayahId as number | null | undefined
-            );
-            if (wilayahError) {
-                return res.status(400).json({ success: false, message: wilayahError });
-            }
-            const tslValidationError = validateTslFields(fields);
-            if (tslValidationError) {
-                return res.status(400).json({ success: false, message: tslValidationError });
-            }
-            const nomorSkError = await validateUniqueNomorSk(table, fields.nomorSk);
-            if (nomorSkError) {
-                return res.status(409).json({ success: false, message: nomorSkError });
-            }
+            const fields = await validateAndBuildFields(req, res);
+            if (!fields) return;
 
             const result = (await db
                 .insert(table)
@@ -240,22 +250,8 @@ export function createModuleController(opts: ModuleControllerOptions) {
                     fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
                 }
 
-                const fields = buildFields(req.body);
-                const wilayahError = validateWilayahMapping(
-                    fields.bidangWilayahId as number | null | undefined,
-                    fields.seksiWilayahId as number | null | undefined
-                );
-                if (wilayahError) {
-                    return res.status(400).json({ success: false, message: wilayahError });
-                }
-                const tslValidationError = validateTslFields(fields);
-                if (tslValidationError) {
-                    return res.status(400).json({ success: false, message: tslValidationError });
-                }
-                const nomorSkError = await validateUniqueNomorSk(table, fields.nomorSk, id);
-                if (nomorSkError) {
-                    return res.status(409).json({ success: false, message: nomorSkError });
-                }
+                const fields = await validateAndBuildFields(req, res, id);
+                if (!fields) return;
                 const data = await markPending(id, {
                     ...fields,
                     ...(fileSk !== undefined ? { fileSk } : {}),
@@ -276,22 +272,8 @@ export function createModuleController(opts: ModuleControllerOptions) {
                 fileSk = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
             }
 
-            const fields = buildFields(req.body);
-            const wilayahError = validateWilayahMapping(
-                fields.bidangWilayahId as number | null | undefined,
-                fields.seksiWilayahId as number | null | undefined
-            );
-            if (wilayahError) {
-                return res.status(400).json({ success: false, message: wilayahError });
-            }
-            const tslValidationError = validateTslFields(fields);
-            if (tslValidationError) {
-                return res.status(400).json({ success: false, message: tslValidationError });
-            }
-            const nomorSkError = await validateUniqueNomorSk(table, fields.nomorSk, id);
-            if (nomorSkError) {
-                return res.status(409).json({ success: false, message: nomorSkError });
-            }
+            const fields = await validateAndBuildFields(req, res, id);
+            if (!fields) return;
 
             const result = (await db
                 .update(table)
