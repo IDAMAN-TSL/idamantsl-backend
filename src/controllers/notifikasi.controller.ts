@@ -10,7 +10,7 @@ import {
   users,
 } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { handleError } from "../helpers/controller.helpers";
+import { handleError, validateId } from "../helpers/controller.helpers";
 
 type TabelTarget =
   | "penangkaran"
@@ -136,17 +136,17 @@ export async function getNotifikasi(req: AuthRequest, res: Response) {
   }
 }
 
-export async function markNotifikasiRead(req: AuthRequest, res: Response) {
+async function updateNotifikasiStatus(req: AuthRequest, res: Response, targetStatus: "read" | "unread") {
   try {
     if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      return res.status(400).json({ success: false, message: "ID tidak valid" });
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
+
+    const readAtValue = targetStatus === "read" ? new Date() : null;
 
     const [updated] = await db
       .update(notifikasi)
-      .set({ status: "read", readAt: new Date(), updatedAt: new Date() })
+      .set({ status: targetStatus, readAt: readAtValue, updatedAt: new Date() })
       .where(and(eq(notifikasi.id, id), eq(notifikasi.userId, req.user.id)))
       .returning();
 
@@ -154,34 +154,19 @@ export async function markNotifikasiRead(req: AuthRequest, res: Response) {
       return res.status(404).json({ success: false, message: "Notifikasi tidak ditemukan" });
     }
 
-    return res.status(200).json({ success: true, message: "Notifikasi ditandai sudah dibaca", data: updated });
+    const message = targetStatus === "read" ? "Notifikasi ditandai sudah dibaca" : "Notifikasi ditandai belum dibaca";
+    return res.status(200).json({ success: true, message, data: updated });
   } catch (error) {
-    return handleError(res, error, "markNotifikasiRead", "Gagal memperbarui notifikasi");
+    return handleError(res, error, "updateNotifikasiStatus", "Gagal memperbarui notifikasi");
   }
 }
 
+export async function markNotifikasiRead(req: AuthRequest, res: Response) {
+  return updateNotifikasiStatus(req, res, "read");
+}
+
 export async function markNotifikasiUnread(req: AuthRequest, res: Response) {
-  try {
-    if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      return res.status(400).json({ success: false, message: "ID tidak valid" });
-    }
-
-    const [updated] = await db
-      .update(notifikasi)
-      .set({ status: "unread", readAt: null, updatedAt: new Date() })
-      .where(and(eq(notifikasi.id, id), eq(notifikasi.userId, req.user.id)))
-      .returning();
-
-    if (!updated) {
-      return res.status(404).json({ success: false, message: "Notifikasi tidak ditemukan" });
-    }
-
-    return res.status(200).json({ success: true, message: "Notifikasi ditandai belum dibaca", data: updated });
-  } catch (error) {
-    return handleError(res, error, "markNotifikasiUnread", "Gagal memperbarui notifikasi");
-  }
+  return updateNotifikasiStatus(req, res, "unread");
 }
 
 export async function markAllNotifikasiRead(req: AuthRequest, res: Response) {

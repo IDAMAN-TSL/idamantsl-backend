@@ -1,14 +1,17 @@
 /**
  * build-fields.ts
+/**
+ * build-fields.ts
  *
  * Fungsi pembangun objek fields dari request body untuk tiap modul.
  * Hanya menyertakan field yang ada di body (partial update safe).
  */
 
 import type { InferInsertModel } from "drizzle-orm";
-import { pengedaranDalamNegeri } from "../../db/schema";
+import { pengedaranDalamNegeri, penangkaran } from "../../db/schema";
 import { lembagaKonservasi } from "../../db/schema";
 
+type PenangkaranInsert = InferInsertModel<typeof penangkaran>;
 type PengedaranInsert = InferInsertModel<typeof pengedaranDalamNegeri>;
 type LembagaInsert = InferInsertModel<typeof lembagaKonservasi>;
 type TslItemInput = {
@@ -157,6 +160,16 @@ export const buildPengedaranFields = (body: Record<string, unknown>): Record<str
     ...("namaPengedaran" in body && { namaPengedaran: body.namaPengedaran as string }),
     ...("alamatPengedaran" in body && {
         alamatPengedaran: (body.alamatPengedaran as string) ?? null,
+    }),
+});
+
+// ─── buildPenangkaranFields ───────────────────────────────────────────────────
+
+export const buildPenangkaranFields = (body: Record<string, unknown>): Record<string, unknown> => ({
+    ...buildBaseFields(body, {} as PenangkaranInsert),
+    ...("namaPenangkaran" in body && { namaPenangkaran: body.namaPenangkaran as string }),
+    ...("alamatPenangkaran" in body && {
+        alamatPenangkaran: (body.alamatPenangkaran as string) ?? null,
     }),
 });
 

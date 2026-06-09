@@ -181,7 +181,7 @@ export function createModuleController(opts: ModuleControllerOptions) {
             if (!namaValue) {
                 return res.status(400).json({
                     success: false,
-                    message: `${namaFieldKey} wajib diisi`,
+                    message: `Nama ${entityName} wajib diisi`,
                 });
             }
 

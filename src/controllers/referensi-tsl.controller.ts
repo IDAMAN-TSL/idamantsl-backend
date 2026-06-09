@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { bulkDeleteHandler, handleError } from "../helpers/controller.helpers";
+import { handleError, validateId, bulkDeleteHandler } from "../helpers/controller.helpers";
 import { checkReferensiDependencies } from "../helpers/referensi-deps";
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
@@ -46,6 +46,15 @@ function validateTaxonomyFields(fields: ReturnType<typeof buildReferensiFields>)
     }
   }
 
+  return null;
+}
+
+function validateReferensiFieldsData(fields: any): string | null {
+  if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
+    return "Jenis TSL tidak valid";
+  }
+  const taxonomyError = validateTaxonomyFields(fields);
+  if (taxonomyError) return taxonomyError;
   return null;
 }
 
@@ -113,11 +122,8 @@ export async function getAllReferensi(req: AuthRequest, res: Response) {
 
 export async function getReferensiById(req: AuthRequest, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
 
     const result = await db
       .select(SELECT_FIELDS)
@@ -149,14 +155,9 @@ export async function createReferensi(req: AuthRequest, res: Response) {
       return;
     }
 
-    if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
-      res.status(400).json({ message: "Jenis TSL tidak valid" });
-      return;
-    }
-
-    const taxonomyError = validateTaxonomyFields(fields);
-    if (taxonomyError) {
-      res.status(400).json({ message: taxonomyError });
+    const validationErr = validateReferensiFieldsData(fields);
+    if (validationErr) {
+      res.status(400).json({ message: validationErr });
       return;
     }
 
@@ -177,11 +178,8 @@ export async function createReferensi(req: AuthRequest, res: Response) {
 
 export async function updateReferensi(req: AuthRequest, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
 
     const user = req.user!;
     const existing = await findReferensiById(id);
@@ -193,14 +191,9 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
 
     if (user.role === "bidang_wilayah") {
       const fields = buildReferensiFields(req.body);
-      if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
-        res.status(400).json({ message: "Jenis TSL tidak valid" });
-        return;
-      }
-
-      const taxonomyError = validateTaxonomyFields(fields);
-      if (taxonomyError) {
-        res.status(400).json({ message: taxonomyError });
+      const validationErr = validateReferensiFieldsData(fields);
+      if (validationErr) {
+        res.status(400).json({ message: validationErr });
         return;
       }
 
@@ -225,14 +218,9 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
     // admin_pusat → langsung update, hanya field yang ada di body
     const fields = buildReferensiFields(req.body);
 
-    if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
-      res.status(400).json({ message: "Jenis TSL tidak valid" });
-      return;
-    }
-
-    const taxonomyError = validateTaxonomyFields(fields);
-    if (taxonomyError) {
-      res.status(400).json({ message: taxonomyError });
+    const validationErr = validateReferensiFieldsData(fields);
+    if (validationErr) {
+      res.status(400).json({ message: validationErr });
       return;
     }
 
@@ -268,11 +256,8 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
 
 export async function deleteReferensi(req: AuthRequest, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
 
     const user = req.user!;
     const existing = await findReferensiById(id);

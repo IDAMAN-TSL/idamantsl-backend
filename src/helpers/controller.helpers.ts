@@ -23,6 +23,15 @@ export const isNotOwner = (role, createdBy, userId) => {
   return createdBy !== userId;
 };
 
+export const validateId = (idStr: any, res: Response): number | null => {
+  const id = Number(idStr);
+  if (Number.isNaN(id)) {
+    res.status(400).json({ message: "ID tidak valid" });
+    return null;
+  }
+  return id;
+};
+
 export async function validateUniqueNomorSk(
   table: { id: any; nomorSk: any },
   nomorSk: unknown,
