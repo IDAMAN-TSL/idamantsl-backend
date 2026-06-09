@@ -8,7 +8,15 @@ jest.mock("../db/index", () => ({
       users: {
         findFirst: jest.fn(),
       },
+      notifikasi: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     },
+    select: jest.fn(() => ({
+      from: jest.fn(() => ({
+        where: jest.fn().mockResolvedValue([]),
+      })),
+    })),
     update: jest.fn(() => ({
       set: jest.fn(() => ({
         where: jest.fn(),
@@ -37,6 +45,10 @@ jest.mock("jsonwebtoken", () => ({
       this.name = "JsonWebTokenError";
     }
   },
+}));
+
+jest.mock("../src/helpers/mailer", () => ({
+  sendResetEmail: jest.fn().mockResolvedValue(true),
 }));
 
 import bcrypt from "bcryptjs";
@@ -193,15 +205,16 @@ describe("Auth Endpoints", () => {
       expect(res.body.success).toBe(true);
     });
 
-    it("tetap return 200 meski email tidak terdaftar", async () => {
+    it("gagal jika email tidak terdaftar", async () => {
       (mockDb.query.users.findFirst as jest.Mock).mockResolvedValue(null);
 
       const res = await request(app)
         .post("/api/auth/forgot-password")
         .send({ email: "tidakterdaftar@email.com" });
 
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Email tidak terdaftar dalam sistem");
     });
 
     it("gagal jika email tidak diisi", async () => {

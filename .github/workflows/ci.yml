@@ -4,11 +4,10 @@ on:
   push:
     branches:
       - main
-      - develop
+      - rahmah
   pull_request:
     branches:
       - main
-      - develop
 
 jobs:
   build-and-analyze:

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, json } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, json, unique } from "drizzle-orm/pg-core";
 import {
   statusVerifikasiEnum,
   statusCitesEnum,
@@ -8,6 +8,15 @@ import {
 import { wilayah } from "./wilayah";
 import { referensiTsl } from "./referensi-tsl";
 import { users } from "./users";
+
+export type TslItem = {
+  tslId: number;
+  statusPerlindunganNasional?: string | null;
+  statusCites?: string | null;
+  statusIucn?: string | null;
+  jantan?: number | null;
+  betina?: number | null;
+};
 
 export const penangkaran = pgTable("penangkaran", {
   id: serial("id").primaryKey(),
@@ -37,7 +46,9 @@ export const penangkaran = pgTable("penangkaran", {
 
   // Relasi ke referensi TSL
   tslId: integer("tsl_id").references(() => referensiTsl.id),
-  
+  jumlahTsl: integer("jumlah_tsl").default(1),
+  tslItems: json("tsl_items").$type<TslItem[]>(),
+
   statusPerlindunganNasional: statusPerlindunganNasionalEnum("status_perlindungan_nasional"),
   statusCites: statusCitesEnum("status_cites"),
   statusIucn: statusIucnEnum("status_iucn"),
@@ -56,4 +67,6 @@ export const penangkaran = pgTable("penangkaran", {
   updatedBy: integer("updated_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  nomorSkUnique: unique("penangkaran_nomor_sk_unique").on(table.nomorSk),
+}));

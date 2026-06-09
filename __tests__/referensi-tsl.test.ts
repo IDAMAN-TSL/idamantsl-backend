@@ -17,9 +17,9 @@ jest.mock("jsonwebtoken", () => ({
   sign: jest.fn(),
 }));
 
-const mockAdmin  = { id: 1, role: "admin_pusat" };
+const mockAdmin = { id: 1, role: "admin_pusat" };
 const mockBidang = { id: 5, role: "bidang_wilayah" };
-const mockSeksi  = { id: 6, role: "seksi_wilayah" };
+const mockSeksi = { id: 6, role: "seksi_wilayah" };
 
 const mockReferensi = {
   id: 1,
@@ -87,9 +87,88 @@ function mockDelete() {
   return chain;
 }
 
+// Helper: mock checkTslDependencies (4 panggilan db.select yang return [])
+// + findReferensiById (1 panggilan db.select yang return data)
+// Urutan: findReferensiById → checkTslDependencies (4x)
+function mockSelectForDelete(existing: unknown) {
+  const findChain = {
+    from: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue(existing ? [existing] : []),
+    orderBy: jest.fn().mockResolvedValue(existing ? [existing] : []),
+  };
+  const depChain = {
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue([]), // tidak ada dependensi
+  };
+  (db.select as jest.Mock)
+    .mockReturnValueOnce(findChain)   // findReferensiById
+    .mockReturnValueOnce(depChain)    // cek penangkaran
+    .mockReturnValueOnce(depChain)    // cek pengedaran_dn
+    .mockReturnValueOnce(depChain)    // cek pengedaran_ln
+    .mockReturnValueOnce(depChain);   // cek lembaga_konservasi
+}
+
+// Helper: mock checkTslDependencies yang MENEMUKAN dependensi
+function mockSelectForDeleteBlocked(existing: unknown, depsResult: unknown[] = [{ id: 1 }]) {
+  const findChain = {
+    from: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue(existing ? [existing] : []),
+    orderBy: jest.fn().mockResolvedValue(existing ? [existing] : []),
+  };
+  const depFoundChain = {
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue(depsResult), // ADA dependensi
+  };
+  const depEmptyChain = {
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue([]),
+  };
+  (db.select as jest.Mock)
+    .mockReturnValueOnce(findChain)       // findReferensiById
+    .mockReturnValueOnce(depFoundChain)   // cek penangkaran → ADA
+    .mockReturnValueOnce(depEmptyChain)   // cek pengedaran_dn
+    .mockReturnValueOnce(depEmptyChain)   // cek pengedaran_ln
+    .mockReturnValueOnce(depEmptyChain);  // cek lembaga_konservasi
+}
+
+// Helper: mock untuk bulk delete referensi-tsl
+// Urutan actual: checkTslDependencies per ID (4x select per ID) → bulkDeleteHandler findById per ID
+function mockSelectForBulkDelete(items: unknown[]) {
+  let mockFn = db.select as jest.Mock;
+
+  // Phase 1: checkTslDependencies untuk setiap ID (4 selects per ID, semua return [])
+  for (let i = 0; i < items.length; i++) {
+    for (let j = 0; j < 4; j++) {
+      mockFn = mockFn.mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([]),
+      }) as jest.Mock;
+    }
+  }
+
+  // Phase 2: bulkDeleteHandler findById — use mockReturnValue (default fallback)
+  // so all remaining calls get a valid item
+  const findChain = {
+    from: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue([items[0]]),
+    orderBy: jest.fn().mockResolvedValue([items[0]]),
+  };
+  mockFn.mockReturnValue(findChain);
+}
+
 describe("Referensi TSL Controller", () => {
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   // ─── GET /api/referensi-tsl ───────────────────────────────────────────────
 
@@ -162,7 +241,7 @@ describe("Referensi TSL Controller", () => {
         .set("Authorization", TOKEN);
 
       expect(res.status).toBe(400);
-      expect(res.body.message).toBe("statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak");
+      expect(res.body.message).toBe("statusVerifikasi tidak valid. Gunakan: pending, disetujui, ditolak, atau all");
     });
 
     it("500 - error server", async () => {
@@ -481,9 +560,9 @@ describe("Referensi TSL Controller", () => {
 
   describe("DELETE /api/referensi-tsl/:id", () => {
 
-    it("200 - admin_pusat berhasil hapus", async () => {
+    it("200 - admin_pusat berhasil hapus (tidak ada dependensi)", async () => {
       setUser(mockAdmin);
-      mockSelect([mockReferensi]);
+      mockSelectForDelete(mockReferensi);
       mockDelete();
 
       const res = await request(app)
@@ -494,10 +573,22 @@ describe("Referensi TSL Controller", () => {
       expect(res.body.message).toBe("Referensi TSL berhasil dihapus");
     });
 
+    it("409 - admin_pusat gagal hapus karena masih direferensikan", async () => {
+      setUser(mockAdmin);
+      mockSelectForDeleteBlocked(mockReferensi);
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/1")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain("masih digunakan oleh");
+      expect(res.body.dependencies).toContain("Penangkaran");
+    });
+
     it("200 - bidang_wilayah hapus data milik sendiri → jadi pending delete", async () => {
-      // Controller tidak cek createdBy — semua bidang_wilayah langsung set pendingChanges._action: delete
       setUser(mockBidang);
-      mockSelect([{ ...mockReferensi, createdBy: 5 }]);
+      mockSelectForDelete({ ...mockReferensi, createdBy: 5 });
       mockUpdate();
 
       const res = await request(app)
@@ -509,9 +600,8 @@ describe("Referensi TSL Controller", () => {
     });
 
     it("200 - bidang_wilayah hapus data milik orang lain → jadi pending delete", async () => {
-      // Controller tidak membedakan createdBy — semua bidang_wilayah masuk alur yang sama
       setUser(mockBidang);
-      mockSelect([{ ...mockReferensi, createdBy: 1 }]);
+      mockSelectForDelete({ ...mockReferensi, createdBy: 1 });
       mockUpdate();
 
       const res = await request(app)
@@ -523,9 +613,8 @@ describe("Referensi TSL Controller", () => {
     });
 
     it("200 - bidang_wilayah hapus data yang statusVerifikasi pending → tetap diproses", async () => {
-      // Controller tidak memblokir hapus meski statusVerifikasi sudah pending
       setUser(mockBidang);
-      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" }]);
+      mockSelectForDelete({ ...mockReferensi, createdBy: 5, statusVerifikasi: "pending" });
       mockUpdate();
 
       const res = await request(app)
@@ -537,9 +626,8 @@ describe("Referensi TSL Controller", () => {
     });
 
     it("200 - bidang_wilayah hapus data yang statusVerifikasi ditolak → diajukan ulang", async () => {
-      // Controller tidak memblokir hapus meski statusVerifikasi ditolak
       setUser(mockBidang);
-      mockSelect([{ ...mockReferensi, createdBy: 5, statusVerifikasi: "ditolak", catatanVerifikasi: "Data tidak valid" }]);
+      mockSelectForDelete({ ...mockReferensi, createdBy: 5, statusVerifikasi: "ditolak" });
       mockUpdate();
 
       const res = await request(app)
@@ -562,7 +650,7 @@ describe("Referensi TSL Controller", () => {
 
     it("404 - data tidak ditemukan saat hapus", async () => {
       setUser(mockAdmin);
-      mockSelect([]);
+      mockSelectForDelete(null);
 
       const res = await request(app)
         .delete("/api/referensi-tsl/999")
@@ -583,6 +671,7 @@ describe("Referensi TSL Controller", () => {
 
     it("500 - error server saat delete", async () => {
       setUser(mockAdmin);
+      (db.select as jest.Mock).mockReset();
       (db.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
 
       const res = await request(app)
@@ -599,6 +688,9 @@ describe("Referensi TSL Controller", () => {
 
     it("200 - admin_pusat berhasil bulk delete", async () => {
       setUser(mockAdmin);
+      (db.select as jest.Mock).mockReset();
+      // Bulk delete: cek dependensi per ID (4x select) + findById per ID
+      mockSelectForBulkDelete([{ id: 1, createdBy: 1 }, { id: 2, createdBy: 1 }, { id: 3, createdBy: 1 }]);
       (db.delete as jest.Mock).mockReturnValue({
         where: jest.fn().mockResolvedValue(undefined),
       });
@@ -663,40 +755,15 @@ describe("Referensi TSL Controller", () => {
       expect(res.body.message).toContain("Semua id harus berupa angka");
     });
 
-    it("403 - bidang_wilayah gagal bulk delete jika ada data milik orang lain", async () => {
+    it("200 - bidang_wilayah bulk delete data manapun → semua jadi pending (soft delete)", async () => {
       setUser(mockBidang);
-      const mockChain1 = {
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([{ id: 1, createdBy: 5 }]),
-      };
-      const mockChain2 = {
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([{ id: 2, createdBy: 1 }]),
-      };
-      (db.select as jest.Mock)
-        .mockReturnValueOnce(mockChain1)
-        .mockReturnValueOnce(mockChain2);
-
-      const res = await request(app)
-        .delete("/api/referensi-tsl/bulk")
-        .set("Authorization", TOKEN)
-        .send({ ids: [1, 2] });
-
-      expect(res.status).toBe(403);
-      expect(res.body.success).toBe(false);
-      expect(res.body.message).toContain("tidak ditemukan atau bukan milik Anda");
-    });
-
-    it("200 - bidang_wilayah berhasil bulk delete data milik sendiri", async () => {
-      setUser(mockBidang);
-      mockSelect([
-        { id: 1, createdBy: 5 },
-        { id: 2, createdBy: 5 },
-      ]);
-      (db.delete as jest.Mock).mockReturnValue({
-        where: jest.fn().mockResolvedValue(undefined),
+      (db.select as jest.Mock).mockReset();
+      // Bulk delete bidang: cek dependensi per ID + findById per ID
+      mockSelectForBulkDelete([{ id: 1, createdBy: 5 }, { id: 2, createdBy: 1 }]);
+      (db.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue(undefined),
+        }),
       });
 
       const res = await request(app)
@@ -706,12 +773,32 @@ describe("Referensi TSL Controller", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.message).toContain("2 data referensi TSL berhasil dihapus");
+      expect(res.body.message).toContain("pengajuan penghapusan");
+    });
+
+    it("200 - bidang_wilayah berhasil bulk delete data milik sendiri → jadi pending", async () => {
+      setUser(mockBidang);
+      (db.select as jest.Mock).mockReset();
+      mockSelectForBulkDelete([{ id: 1, createdBy: 5 }, { id: 2, createdBy: 5 }]);
+      (db.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue(undefined),
+        }),
+      });
+
+      const res = await request(app)
+        .delete("/api/referensi-tsl/bulk")
+        .set("Authorization", TOKEN)
+        .send({ ids: [1, 2] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toContain("2 pengajuan penghapusan referensi TSL");
     });
 
     it("500 - error server saat bulk delete", async () => {
       setUser(mockAdmin);
-      (db.delete as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
+      (db.select as jest.Mock).mockImplementation(() => { throw new Error("DB error"); });
 
       const res = await request(app)
         .delete("/api/referensi-tsl/bulk")
@@ -721,4 +808,5 @@ describe("Referensi TSL Controller", () => {
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
     });
-  });});
+  });
+});

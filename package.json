@@ -5,6 +5,18 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
+    "setupFiles": [
+      "dotenv/config"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.ts"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/dist/"
+    ],
+    "moduleNameMapper": {
+      "^uuid$": "<rootDir>/__mocks__/uuid.ts"
+    },
     "testMatch": [
       "**/__tests__/**/*.test.ts"
     ],
@@ -24,19 +36,30 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "seed": "tsx db/seed.ts",
+    "migrate": "tsx db/migrate.ts",
     "test": "cross-env NODE_ENV=test jest --forceExit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "overrides": {
+    "path-to-regexp": "8.2.0",
+    "router": {
+      "path-to-regexp": "8.2.0"
+    }
+  },
   "dependencies": {
+    "@azure/storage-blob": "^12.31.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.20.0"
+    "multer": "^2.1.1",
+    "nodemailer": "^8.0.7",
+    "pg": "^8.20.0",
+    "uuid": "^14.0.0"
   },
   "description": "",
   "devDependencies": {
@@ -45,9 +68,12 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
     "@types/node": "^25.6.0",
+    "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.0",
+    "@types/uuid": "^10.0.0",
     "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.10",
     "jest": "^30.3.0",

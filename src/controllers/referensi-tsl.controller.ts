@@ -3,9 +3,12 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { bulkDeleteHandler } from "../helpers/controller.helpers";
+import { handleError, validateId, bulkDeleteHandler } from "../helpers/controller.helpers";
+import { checkReferensiDependencies } from "../helpers/referensi-deps";
 
 const VALID_JENIS = ["tumbuhan", "satwa_liar"];
+const TAXONOMY_FIELDS = ["kingdom", "divisi", "kelas", "ordo", "famili", "genus", "spesies"] as const;
+const TAXONOMY_PATTERN = /^[A-Za-z\s]+$/;
 
 // ─── findReferensiById ────────────────────────────────────────────────────────
 
@@ -56,6 +59,48 @@ function buildReferensiFields(body: Request["body"]) {
   };
 }
 
+function validateTaxonomyFields(fields: ReturnType<typeof buildReferensiFields>) {
+  for (const field of TAXONOMY_FIELDS) {
+    const value = fields[field];
+    if (value === undefined || value === null || value === "") continue;
+    if (typeof value !== "string" || !TAXONOMY_PATTERN.test(value)) {
+      return `${field} harus berupa huruf`;
+    }
+  }
+
+  return null;
+}
+
+function validateReferensiFieldsData(fields: any): string | null {
+  if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
+    return "Jenis TSL tidak valid";
+  }
+  const taxonomyError = validateTaxonomyFields(fields);
+  if (taxonomyError) return taxonomyError;
+  return null;
+}
+
+function validateTaxonomyFields(fields: ReturnType<typeof buildReferensiFields>) {
+  for (const field of TAXONOMY_FIELDS) {
+    const value = fields[field];
+    if (value === undefined || value === null || value === "") continue;
+    if (typeof value !== "string" || !TAXONOMY_PATTERN.test(value)) {
+      return `${field} harus berupa huruf`;
+    }
+  }
+
+  return null;
+}
+
+function validateReferensiFieldsData(fields: any): string | null {
+  if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
+    return "Jenis TSL tidak valid";
+  }
+  const taxonomyError = validateTaxonomyFields(fields);
+  if (taxonomyError) return taxonomyError;
+  return null;
+}
+
 // ─── SELECT_FIELDS ────────────────────────────────────────────────────────────
 
 const SELECT_FIELDS = {
@@ -84,62 +129,44 @@ const SELECT_FIELDS = {
 
 // ─── GET /api/referensi-tsl ───────────────────────────────────────────────────
 
-// ─── GET /api/referensi-tsl ───────────────────────────────────────────────────
-
-export async function getAllReferensi(
-  req: AuthRequest,
-  res: Response,
-): Promise<void> {
+export async function getAllReferensi(req: AuthRequest, res: Response) {
   try {
     const { statusVerifikasi } = req.query;
-    const validStatus = ["pending", "disetujui", "ditolak"];
+    const validStatus = ["pending", "disetujui", "ditolak", "all"];
 
     if (statusVerifikasi && !validStatus.includes(statusVerifikasi as string)) {
-      res
-        .status(400)
-        .json({
-          message:
-            "statusVerifikasi tidak valid. Gunakan: pending, disetujui, atau ditolak",
-        });
+      res.status(400).json({ message: "statusVerifikasi tidak valid. Gunakan: pending, disetujui, ditolak, atau all" });
       return;
     }
+
+    // Default: tampilkan hanya data yang sudah disetujui di tabel utama.
+    // - "?statusVerifikasi=pending" / "ditolak" → filter eksplisit
+    // - "?statusVerifikasi=all"                  → tampilkan semua status
+    const statusFilter = (statusVerifikasi as string | undefined) ?? "disetujui";
 
     const query = db
       .select(SELECT_FIELDS)
       .from(referensiTsl)
       .leftJoin(users, eq(referensiTsl.createdBy, users.id));
 
-    const result = statusVerifikasi
-      ? await query
-          .where(
-            eq(
-              referensiTsl.statusVerifikasi,
-              statusVerifikasi as "pending" | "disetujui" | "ditolak",
-            ),
-          )
-          .orderBy(referensiTsl.createdAt)
-      : await query.orderBy(referensiTsl.createdAt);
+    const result = statusFilter === "all"
+      ? await query.orderBy(referensiTsl.createdAt)
+      : await query
+        .where(eq(referensiTsl.statusVerifikasi, statusFilter as "pending" | "disetujui" | "ditolak"))
+        .orderBy(referensiTsl.createdAt);
 
     res.status(200).json({ data: result });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data referensi TSL" });
+  } catch (error) {
+    return handleError(res, error, "getAllReferensi", "Gagal mengambil data referensi TSL");
   }
 }
 
 // ─── GET /api/referensi-tsl/:id ───────────────────────────────────────────────
 
-// ─── GET /api/referensi-tsl/:id ───────────────────────────────────────────────
-
-export async function getReferensiById(
-  req: AuthRequest,
-  res: Response,
-): Promise<void> {
+export async function getReferensiById(req: AuthRequest, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
 
     const result = await db
       .select(SELECT_FIELDS)
@@ -154,19 +181,14 @@ export async function getReferensiById(
     }
 
     res.status(200).json({ data: result[0] });
-  } catch {
-    res.status(500).json({ message: "Gagal mengambil data referensi TSL" });
+  } catch (error) {
+    return handleError(res, error, "getReferensiById", "Gagal mengambil data referensi TSL");
   }
 }
 
 // ─── POST /api/referensi-tsl ──────────────────────────────────────────────────
 
-// ─── POST /api/referensi-tsl ──────────────────────────────────────────────────
-
-export async function createReferensi(
-  req: AuthRequest,
-  res: Response,
-): Promise<void> {
+export async function createReferensi(req: AuthRequest, res: Response) {
   try {
     const user = req.user!;
     const fields = buildReferensiFields(req.body);
@@ -176,8 +198,9 @@ export async function createReferensi(
       return;
     }
 
-    if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
-      res.status(400).json({ message: "Jenis TSL tidak valid" });
+    const validationErr = validateReferensiFieldsData(fields);
+    if (validationErr) {
+      res.status(400).json({ message: validationErr });
       return;
     }
 
@@ -189,36 +212,34 @@ export async function createReferensi(
       .values({ ...fields, statusVerifikasi, createdBy: user.id })
       .returning();
 
-    res
-      .status(201)
-      .json({ message: "Referensi TSL berhasil ditambahkan", data: newData });
-  } catch {
-    res.status(500).json({ message: "Gagal menambahkan referensi TSL" });
+    res.status(201).json({ message: "Referensi TSL berhasil ditambahkan", data: newData });
+  } catch (error) {
+    return handleError(res, error, "createReferensi", "Gagal menambahkan referensi TSL");
   }
+}
+
+async function getValidatedExistingReferensi(req: AuthRequest, res: Response) {
+  const id = validateId(req.params.id, res);
+  if (id === null) return null;
+
+  const user = req.user!;
+  const existing = await findReferensiById(id);
+
+  if (!existing) {
+    res.status(404).json({ message: "Referensi TSL tidak ditemukan" });
+    return null;
+  }
+
+  return { id, user, existing };
 }
 
 // ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────────
 
-// ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────────
-
-export async function updateReferensi(
-  req: AuthRequest,
-  res: Response,
-): Promise<void> {
+export async function updateReferensi(req: AuthRequest, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
-
-    const user = req.user!;
-    const existing = await findReferensiById(id);
-
-    if (!existing) {
-      res.status(404).json({ message: "Referensi TSL tidak ditemukan" });
-      return;
-    }
+    const validated = await getValidatedExistingReferensi(req, res);
+    if (!validated) return;
+    const { id, user, existing } = validated;
 
     if (user.role === "bidang_wilayah") {
       if (existing.statusVerifikasi === "pending") {
@@ -236,15 +257,16 @@ export async function updateReferensi(
       }
 
       const fields = buildReferensiFields(req.body);
-      if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
-        res.status(400).json({ message: "Jenis TSL tidak valid" });
+      const validationErr = validateReferensiFieldsData(fields);
+      if (validationErr) {
+        res.status(400).json({ message: validationErr });
         return;
       }
 
       const [updated] = await db
         .update(referensiTsl)
         .set({
-          pendingChanges: fields,
+          pendingChanges: { ...fields, diajukanOleh: user.id },
           statusVerifikasi: "pending",
           createdBy: existing.createdBy ?? user.id,
           updatedAt: new Date(),
@@ -262,26 +284,27 @@ export async function updateReferensi(
     // admin_pusat → langsung update, hanya field yang ada di body
     const fields = buildReferensiFields(req.body);
 
-    if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
-      res.status(400).json({ message: "Jenis TSL tidak valid" });
+    const validationErr = validateReferensiFieldsData(fields);
+    if (validationErr) {
+      res.status(400).json({ message: validationErr });
       return;
     }
 
     const updateData: Partial<typeof referensiTsl.$inferInsert> = {};
-    if (fields.nomor !== undefined)                       updateData.nomor = fields.nomor;
-    if (fields.namaDaerah)                                updateData.namaDaerah = fields.namaDaerah;
-    if (fields.jenis)                                     updateData.jenis = fields.jenis;
-    if (fields.kingdom !== undefined)                     updateData.kingdom = fields.kingdom;
-    if (fields.divisi !== undefined)                      updateData.divisi = fields.divisi;
-    if (fields.kelas !== undefined)                       updateData.kelas = fields.kelas;
-    if (fields.ordo !== undefined)                        updateData.ordo = fields.ordo;
-    if (fields.famili !== undefined)                      updateData.famili = fields.famili;
-    if (fields.genus !== undefined)                       updateData.genus = fields.genus;
-    if (fields.spesies !== undefined)                     updateData.spesies = fields.spesies;
-    if (fields.statusPerlindunganNasional !== undefined)  updateData.statusPerlindunganNasional = fields.statusPerlindunganNasional;
-    if (fields.statusCites !== undefined)                 updateData.statusCites = fields.statusCites;
-    if (fields.statusIucn !== undefined)                  updateData.statusIucn = fields.statusIucn;
-    if (fields.catatanVerifikasi !== undefined)           updateData.catatanVerifikasi = fields.catatanVerifikasi;
+    if (fields.nomor !== undefined) updateData.nomor = fields.nomor;
+    if (fields.namaDaerah) updateData.namaDaerah = fields.namaDaerah;
+    if (fields.jenis) updateData.jenis = fields.jenis;
+    if (fields.kingdom !== undefined) updateData.kingdom = fields.kingdom;
+    if (fields.divisi !== undefined) updateData.divisi = fields.divisi;
+    if (fields.kelas !== undefined) updateData.kelas = fields.kelas;
+    if (fields.ordo !== undefined) updateData.ordo = fields.ordo;
+    if (fields.famili !== undefined) updateData.famili = fields.famili;
+    if (fields.genus !== undefined) updateData.genus = fields.genus;
+    if (fields.spesies !== undefined) updateData.spesies = fields.spesies;
+    if (fields.statusPerlindunganNasional !== undefined) updateData.statusPerlindunganNasional = fields.statusPerlindunganNasional;
+    if (fields.statusCites !== undefined) updateData.statusCites = fields.statusCites;
+    if (fields.statusIucn !== undefined) updateData.statusIucn = fields.statusIucn;
+    if (fields.catatanVerifikasi !== undefined) updateData.catatanVerifikasi = fields.catatanVerifikasi;
 
     const [updated] = await db
       .update(referensiTsl)
@@ -289,34 +312,27 @@ export async function updateReferensi(
       .where(eq(referensiTsl.id, id))
       .returning();
 
-    res
-      .status(200)
-      .json({ message: "Referensi TSL berhasil diperbarui", data: updated });
-  } catch {
-    res.status(500).json({ message: "Gagal memperbarui referensi TSL" });
+    res.status(200).json({ message: "Referensi TSL berhasil diperbarui", data: updated });
+  } catch (error) {
+    return handleError(res, error, "updateReferensi", "Gagal memperbarui referensi TSL");
   }
 }
 
 // ─── DELETE /api/referensi-tsl/:id ───────────────────────────────────────────
 
-// ─── DELETE /api/referensi-tsl/:id ───────────────────────────────────────────
-
-export async function deleteReferensi(
-  req: AuthRequest,
-  res: Response,
-): Promise<void> {
+export async function deleteReferensi(req: AuthRequest, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const validated = await getValidatedExistingReferensi(req, res);
+    if (!validated) return;
+    const { id, user, existing } = validated;
 
-    const user = req.user!;
-    const existing = await findReferensiById(id);
-
-    if (!existing) {
-      res.status(404).json({ message: "Referensi TSL tidak ditemukan" });
+    // Cek dependensi sebelum hapus/ajukan hapus
+    const deps = await checkReferensiDependencies(id);
+    if (deps) {
+      res.status(409).json({
+        message: `Tidak dapat menghapus referensi TSL ini karena masih digunakan oleh: ${deps.join(", ")}. Hapus atau ubah data terkait terlebih dahulu.`,
+        dependencies: deps,
+      });
       return;
     }
 
@@ -324,7 +340,7 @@ export async function deleteReferensi(
       await db
         .update(referensiTsl)
         .set({
-          pendingChanges: { _action: "delete" },
+          pendingChanges: { _action: "delete", diajukanOleh: user.id },
           statusVerifikasi: "pending",
           createdBy: existing.createdBy ?? user.id,
           updatedAt: new Date(),
@@ -337,8 +353,8 @@ export async function deleteReferensi(
 
     await db.delete(referensiTsl).where(eq(referensiTsl.id, id));
     res.status(200).json({ message: "Referensi TSL berhasil dihapus" });
-  } catch {
-    res.status(500).json({ message: "Gagal menghapus referensi TSL" });
+  } catch (error) {
+    return handleError(res, error, "deleteReferensi", "Gagal menghapus referensi TSL");
   }
 }
 
@@ -346,9 +362,39 @@ export async function deleteReferensi(
 
 export const bulkDeleteReferensi = async (req: AuthRequest, res: Response) => {
   try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, message: "ids wajib diisi dan harus berupa array" });
+      return;
+    }
+
+    const numericIds = ids.map(Number).filter((id: number) => !isNaN(id));
+    if (numericIds.length !== ids.length) {
+      res.status(400).json({ success: false, message: "Semua id harus berupa angka" });
+      return;
+    }
+
+    // Cek dependensi untuk setiap ID
+    const blocked: { id: number; deps: string[] }[] = [];
+    for (const id of numericIds) {
+      const deps = await checkReferensiDependencies(id);
+      if (deps) blocked.push({ id, deps });
+    }
+
+    if (blocked.length > 0) {
+      const detail = blocked.map(b => `ID ${b.id} (${b.deps.join(", ")})`).join("; ");
+      res.status(409).json({
+        success: false,
+        message: `Tidak dapat menghapus karena masih digunakan: ${detail}. Hapus atau ubah data terkait terlebih dahulu.`,
+        blocked,
+      });
+      return;
+    }
+
+    // Lanjut ke bulkDeleteHandler biasa (sudah lolos cek dependensi)
     return await bulkDeleteHandler(req, res, referensiTsl, findReferensiById, "referensi TSL");
   } catch (error) {
-    console.error("Bulk delete referensi TSL error:", error);
-    return res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+    return handleError(res, error, "bulkDeleteReferensi");
   }
 };

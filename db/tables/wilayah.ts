@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
 import { tipeWilayahEnum } from "../enums/enum";
 
 export const wilayah = pgTable("wilayah", {
@@ -11,6 +11,7 @@ export const wilayah = pgTable("wilayah", {
   alamatWilayah: text("alamat_wilayah"),
 
   tipeWilayah: tipeWilayahEnum("tipe_wilayah").notNull(),
+  parentWilayahId: integer("parent_wilayah_id"),
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
