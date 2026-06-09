@@ -3,6 +3,7 @@ import { eq, and, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "../../db";
 import { users, wilayah, referensiTsl, penangkaran, lembagaKonservasi, pengedaranDalamNegeri, pengedaranLuarNegeri, verifikasiLog } from "../../db/schema";
+import { handleError } from "../helpers/controller.helpers";
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ async function validateWilayahForRole(
 
 // ─── Validasi password baru (untuk update; opsional) ─────────────────────────
 
-function validateOptionalPassword(
+export function validateOptionalPassword(
   password: unknown
 ): { error: string; status: number } | null {
   if (password === undefined || password === null || password === "") return null;
