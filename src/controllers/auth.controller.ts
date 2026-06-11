@@ -29,7 +29,7 @@ export const login = async (req: Request, res: Response) => {
         message: "Email atau password salah",
       });
     }
-    if (user.deletedAt !== null) {
+    if (user.deletedAt != null) {
       return res.status(403).json({
         success: false,
         message: "Akun ini telah dihapus.",

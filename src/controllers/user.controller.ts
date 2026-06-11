@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { eq, and, ne, isNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "../../db";
-import { users, wilayah, referensiTsl, penangkaran, verifikasiLog } from "../../db/schema";
+import { users, wilayah } from "../../db/schema";
 import { handleError, validateId } from "../helpers/controller.helpers";
 
 const USER_SELECT_FIELDS = {
@@ -49,7 +49,7 @@ async function validateWilayahForRole(
   role: string
 ): Promise<{ error: string; status: number } | null> {
   const parsedWilayahId = Number(wilayahId);
-  if (isNaN(parsedWilayahId)) {
+  if (Number.isNaN(parsedWilayahId)) {
     return { error: "wilayahId harus berupa angka", status: 400 };
   }
 
@@ -205,6 +205,42 @@ export async function createUser(req: Request, res: Response) {
 
 // ─── PUT /api/users/:id ───────────────────────────────────────────────────────
 
+async function validateUpdateData(
+  id: number,
+  email: string | undefined,
+  role: string | undefined,
+  wilayahId: number | undefined | null,
+  password: unknown,
+  existingRole: string
+): Promise<{ error: string; status: number } | null> {
+  if (role && !VALID_ROLES.includes(role as UserRole)) {
+    return { error: "Role tidak valid", status: 400 };
+  }
+
+  const passwordError = validateOptionalPassword(password);
+  if (passwordError) return passwordError;
+
+  if (wilayahId !== undefined && wilayahId !== null) {
+    const targetRole = role ?? existingRole;
+    const wilayahError = await validateWilayahForRole(wilayahId, targetRole);
+    if (wilayahError) return wilayahError;
+  }
+
+  if (email) {
+    const duplicate = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.email, email), ne(users.id, id)))
+      .limit(1);
+
+    if (duplicate[0]) {
+      return { error: "Email sudah digunakan user lain", status: 409 };
+    }
+  }
+
+  return null;
+}
+
 export async function updateUser(req: Request, res: Response) {
   try {
     const id = validateId(req.params.id, res);
@@ -218,37 +254,10 @@ export async function updateUser(req: Request, res: Response) {
 
     const { nama, email, role, wilayahId, password, nomorTelepon, alamatKantor } = buildUserFields(req.body);
 
-    if (role && !VALID_ROLES.includes(role as UserRole)) {
-      res.status(400).json({ message: "Role tidak valid" });
+    const validationError = await validateUpdateData(id, email, role, wilayahId, password, existing.role);
+    if (validationError) {
+      res.status(validationError.status).json({ message: validationError.error });
       return;
-    }
-
-    const passwordError = validateOptionalPassword(password);
-    if (passwordError) {
-      res.status(passwordError.status).json({ message: passwordError.error });
-      return;
-    }
-
-    if (wilayahId) {
-      const targetRole = role ?? existing.role;
-      const wilayahError = await validateWilayahForRole(wilayahId, targetRole);
-      if (wilayahError) {
-        res.status(wilayahError.status).json({ message: wilayahError.error });
-        return;
-      }
-    }
-
-    if (email) {
-      const duplicate = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(and(eq(users.email, email), ne(users.id, id)))
-        .limit(1);
-
-      if (duplicate[0]) {
-        res.status(409).json({ message: "Email sudah digunakan user lain" });
-        return;
-      }
     }
 
     const updateData: Partial<typeof users.$inferInsert> = {};
