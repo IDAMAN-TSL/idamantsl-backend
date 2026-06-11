@@ -2,8 +2,24 @@ import { Request, Response } from "express";
 import { eq, and, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "../../db";
-import { users, wilayah, referensiTsl, penangkaran, lembagaKonservasi, pengedaranDalamNegeri, pengedaranLuarNegeri, verifikasiLog } from "../../db/schema";
-import { handleError } from "../helpers/controller.helpers";
+import { users, wilayah, referensiTsl, penangkaran, verifikasiLog } from "../../db/schema";
+import { handleError, validateId } from "../helpers/controller.helpers";
+
+const USER_SELECT_FIELDS = {
+  id: users.id,
+  nama: users.nama,
+  email: users.email,
+  role: users.role,
+  nomorTelepon: users.nomorTelepon,
+  alamatKantor: users.alamatKantor,
+  wilayahId: users.wilayahId,
+  namaWilayah: wilayah.namaWilayah,
+  statusNotifikasi: users.statusNotifikasi,
+  jumlahNotifikasi: users.jumlahNotifikasi,
+  isActive: users.isActive,
+  createdAt: users.createdAt,
+  updatedAt: users.updatedAt,
+};
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -80,19 +96,7 @@ export function validateOptionalPassword(
 export async function getAllUsers(req: Request, res: Response) {
   try {
     const result = await db
-      .select({
-        id: users.id,
-        nama: users.nama,
-        email: users.email,
-        role: users.role,
-        nomorTelepon: users.nomorTelepon,
-        alamatKantor: users.alamatKantor,
-        wilayahId: users.wilayahId,
-        namaWilayah: wilayah.namaWilayah,
-        isActive: users.isActive,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-      })
+      .select(USER_SELECT_FIELDS)
       .from(users)
       .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
       .orderBy(users.createdAt);
@@ -107,26 +111,11 @@ export async function getAllUsers(req: Request, res: Response) {
 
 export async function getUserById(req: Request, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
 
     const result = await db
-      .select({
-        id: users.id,
-        nama: users.nama,
-        email: users.email,
-        role: users.role,
-        nomorTelepon: users.nomorTelepon,
-        alamatKantor: users.alamatKantor,
-        wilayahId: users.wilayahId,
-        namaWilayah: wilayah.namaWilayah,
-        isActive: users.isActive,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-      })
+      .select(USER_SELECT_FIELDS)
       .from(users)
       .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
       .where(eq(users.id, id))
@@ -217,11 +206,8 @@ export async function createUser(req: Request, res: Response) {
 
 export async function updateUser(req: Request, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
 
     const existing = await findUserById(id);
     if (!existing) {
@@ -302,11 +288,8 @@ export async function updateUser(req: Request, res: Response) {
 
 export async function deleteUser(req: Request, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
 
     const requesterId = (req as Request & { user?: { id: number } }).user?.id;
     if (requesterId === id) {
@@ -354,11 +337,8 @@ export async function deleteUser(req: Request, res: Response) {
 
 export async function adminResetPassword(req: Request, res: Response) {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ message: "ID tidak valid" });
-      return;
-    }
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
 
     const { newPassword } = req.body;
     if (!newPassword || newPassword.length < 8) {

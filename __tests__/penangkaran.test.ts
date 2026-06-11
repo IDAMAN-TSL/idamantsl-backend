@@ -22,6 +22,13 @@ jest.mock("../db/index", () => ({
         })),
       })),
     })),
+    select: jest.fn(() => ({
+      from: jest.fn(() => ({
+        where: jest.fn(() => ({
+          limit: jest.fn().mockResolvedValue([]),
+        })),
+      })),
+    })),
     delete: jest.fn(() => ({
       where: jest.fn(),
     })),

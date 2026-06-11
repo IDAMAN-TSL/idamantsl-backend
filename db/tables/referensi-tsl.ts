@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, jsonb, unique } from "drizzle-orm/pg-core";
 import {
   jenisTslEnum,
   statusVerifikasiEnum,
@@ -11,10 +11,10 @@ import { users } from "./users";
 export const referensiTsl = pgTable("referensi_tsl", {
   id: serial("id").primaryKey(),
   nomor: text("nomor"),
-  namaDaerah: text("nama_daerah").notNull(),
+  namaDaerah: text("nama_daerah").notNull().unique(), // REV-3: tidak boleh duplikat
   jenis: jenisTslEnum("jenis").notNull(),
 
-  // Klasifikasi taksonomi
+  // Klasifikasi taksonomi 
   kingdom: text("kingdom"),
   divisi: text("divisi"),
   kelas: text("kelas"),
@@ -27,7 +27,7 @@ export const referensiTsl = pgTable("referensi_tsl", {
   statusPerlindunganNasional: statusPerlindunganNasionalEnum(
     "status_perlindungan_nasional"
   ),
-  statusCites: statusCitesEnum("status_cites"),
+  statusCites: statusCitesEnum("status_cites"),  // REV-7: sekarang ada non_apendiks
   statusIucn: statusIucnEnum("status_iucn"),
 
   // Verifikasi

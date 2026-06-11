@@ -1,4 +1,9 @@
-import { buildPengedaranFields, buildLembagaFields } from "../src/helpers/build-fields";
+import {
+    buildPengedaranFields,
+    buildLembagaFields,
+    normalizeTslFields,
+    validateTslFields,
+} from "../src/helpers/build-fields";
 
 describe("buildPengedaranFields", () => {
     it("hanya memetakan field yang ada di body", () => {
@@ -198,5 +203,108 @@ describe("buildLembagaFields", () => {
     it("tidak menyertakan field yang tidak ada di body", () => {
         const result = buildLembagaFields({});
         expect(Object.keys(result)).toHaveLength(0);
+    });
+});
+
+describe("normalizeTslFields", () => {
+    it("return object kosong jika body tidak memiliki field TSL", () => {
+        expect(normalizeTslFields({ namaPengedaran: "Test" })).toEqual({});
+    });
+
+    it("membangun tslItems dari tslId lama dan mengisi status/jumlah individu", () => {
+        const result = normalizeTslFields({
+            tslId: "7",
+            statusPerlindunganNasional: "dilindungi",
+            statusCites: "non_apendiks",
+            statusIucn: "risiko_rendah",
+            jantan: "",
+            betina: "4",
+        });
+
+        expect(result).toMatchObject({
+            jumlahTsl: 1,
+            tslId: 7,
+            tslItems: [{
+                tslId: 7,
+                statusPerlindunganNasional: "dilindungi",
+                statusCites: "non_apendiks",
+                statusIucn: "risiko_rendah",
+                jantan: null,
+                betina: 4,
+            }],
+        });
+    });
+
+    it("membangun tslItems dari array dan default jumlahTsl menjadi 1 jika nilai tidak valid", () => {
+        const result = normalizeTslFields({
+            jumlahTsl: 0,
+            tslItems: [{
+                tslId: "8",
+                jantan: "abc",
+                betina: undefined,
+            }],
+        });
+
+        expect(result.jumlahTsl).toBe(1);
+        expect(result.tslId).toBe(8);
+        expect(result.tslItems).toEqual([{
+            tslId: 8,
+            statusPerlindunganNasional: null,
+            statusCites: null,
+            statusIucn: null,
+            jantan: null,
+            betina: null,
+        }]);
+    });
+
+    it("menghasilkan tslItems kosong ketika hanya jumlahTsl dikirim", () => {
+        const result = normalizeTslFields({ jumlahTsl: 2 });
+
+        expect(result).toEqual({
+            jumlahTsl: 2,
+            tslItems: [],
+            tslId: null,
+        });
+    });
+});
+
+describe("validateTslFields", () => {
+    it("return null jika field TSL jamak tidak ada", () => {
+        expect(validateTslFields({ namaPengedaran: "Test" })).toBeNull();
+    });
+
+    it("return null untuk jumlahTsl dan tslItems valid", () => {
+        expect(validateTslFields({
+            jumlahTsl: 2,
+            tslItems: [{ tslId: 1 }, { tslId: 2 }],
+        })).toBeNull();
+    });
+
+    it("menolak jumlahTsl kurang dari 1", () => {
+        expect(validateTslFields({
+            jumlahTsl: 0,
+            tslItems: [],
+        })).toBe("Jumlah TSL wajib berupa angka antara 1 hingga 10");
+    });
+
+    it("menolak jumlah item yang tidak sesuai jumlahTsl", () => {
+        expect(validateTslFields({
+            jumlahTsl: 2,
+            tslItems: [{ tslId: 1 }],
+        })).toBe("Jumlah item referensi TSL harus sesuai dengan jumlahTsl (2)");
+    });
+
+    it("menolak tslId tidak valid", () => {
+        expect(validateTslFields({
+            jumlahTsl: 1,
+            tslItems: [{ tslId: "abc" }],
+        })).toBe("Setiap item referensi TSL wajib memiliki tslId yang valid");
+    });
+
+    it("menolak tslId duplikat dalam satu SK", () => {
+        expect(validateTslFields({
+            jumlahTsl: 2,
+            tslItems: [{ tslId: 3 }, { tslId: "3" }],
+        })).toBe("Referensi TSL dalam satu data tidak boleh duplikat");
     });
 });

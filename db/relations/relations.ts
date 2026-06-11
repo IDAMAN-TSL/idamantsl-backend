@@ -7,6 +7,7 @@ import { pengedaranDalamNegeri } from "../tables/pengedaran-dn";
 import { pengedaranLuarNegeri } from "../tables/pengedaran-ln";
 import { lembagaKonservasi } from "../tables/lembaga-konservasi";
 import { verifikasiLog } from "../tables/verifikasi-log";
+import { notifikasi } from "../tables/notifikasi";
 
 // =============================================
 // RELASI: wilayah
@@ -40,6 +41,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   pengedaranLnDibuat: many(pengedaranLuarNegeri, { relationName: "createdByUserLn" }),
   lembagaDibuat: many(lembagaKonservasi, { relationName: "createdByUserLk" }),
   verifikasiDilakukan: many(verifikasiLog),
+  notifikasi: many(notifikasi),
 }));
 
 // =============================================
@@ -190,6 +192,13 @@ export const lembagaKonservasiRelations = relations(lembagaKonservasi, ({ one })
 export const verifikasiLogRelations = relations(verifikasiLog, ({ one }) => ({
   verifikasiOleh: one(users, {
     fields: [verifikasiLog.verifikasiOleh],
+    references: [users.id],
+  }),
+}));
+
+export const notifikasiRelations = relations(notifikasi, ({ one }) => ({
+  user: one(users, {
+    fields: [notifikasi.userId],
     references: [users.id],
   }),
 }));

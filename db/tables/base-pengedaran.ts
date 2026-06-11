@@ -8,6 +8,7 @@ import {
 import { wilayah } from "./wilayah";
 import { referensiTsl } from "./referensi-tsl";
 import { users } from "./users";
+import type { TslItem } from "./penangkaran";
 
 // Kolom dasar yang dipakai oleh pengedaran-dn & pengedaran-ln.
 // Identik dengan penangkaran kecuali nama kolom alamat & nama entitas.
@@ -39,6 +40,8 @@ export const basePengedaranColumns = {
 
   // Relasi ke referensi TSL
   tslId: integer("tsl_id").references(() => referensiTsl.id),
+  jumlahTsl: integer("jumlah_tsl").default(1),
+  tslItems: json("tsl_items").$type<TslItem[]>(),
 
   // Status perlindungan
   statusPerlindunganNasional: statusPerlindunganNasionalEnum("status_perlindungan_nasional"),

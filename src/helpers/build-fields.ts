@@ -1,16 +1,104 @@
 /**
  * build-fields.ts
+/**
+ * build-fields.ts
  *
  * Fungsi pembangun objek fields dari request body untuk tiap modul.
  * Hanya menyertakan field yang ada di body (partial update safe).
  */
 
 import type { InferInsertModel } from "drizzle-orm";
-import { pengedaranDalamNegeri } from "../../db/schema";
+import { pengedaranDalamNegeri, penangkaran } from "../../db/schema";
 import { lembagaKonservasi } from "../../db/schema";
 
+type PenangkaranInsert = InferInsertModel<typeof penangkaran>;
 type PengedaranInsert = InferInsertModel<typeof pengedaranDalamNegeri>;
 type LembagaInsert = InferInsertModel<typeof lembagaKonservasi>;
+type TslItemInput = {
+    tslId?: unknown;
+    statusPerlindunganNasional?: unknown;
+    statusCites?: unknown;
+    statusIucn?: unknown;
+    jantan?: unknown;
+    betina?: unknown;
+};
+
+const toNullableNumber = (value: unknown) => {
+    if (value === undefined || value === null || value === "") return null;
+    const numberValue = Number(value);
+    return Number.isNaN(numberValue) ? null : numberValue;
+};
+
+export function normalizeTslFields(body: Record<string, unknown>): Record<string, unknown> {
+    const hasTslItems = "tslItems" in body;
+    const hasJumlahTsl = "jumlahTsl" in body;
+    const hasTslId = "tslId" in body;
+
+    if (!hasTslItems && !hasJumlahTsl && !hasTslId) return {};
+    if (hasTslId && !hasTslItems && !hasJumlahTsl && !body.tslId) {
+        return { tslId: null };
+    }
+
+    const rawJumlah = hasJumlahTsl ? Number(body.jumlahTsl) : undefined;
+    const jumlahTsl = rawJumlah && rawJumlah > 0 ? rawJumlah : 1;
+    
+    let parsedTslItems = body.tslItems;
+    if (typeof body.tslItems === "string") {
+        try { parsedTslItems = JSON.parse(body.tslItems); } catch (e) { /* ignore */ }
+    }
+    const rawItems = Array.isArray(parsedTslItems) ? parsedTslItems as TslItemInput[] : [];
+
+    const tslItems = rawItems.length > 0
+        ? rawItems.map((item) => ({
+            tslId: Number(item.tslId),
+            statusPerlindunganNasional: (item.statusPerlindunganNasional as string | null | undefined) ?? null,
+            statusCites: (item.statusCites as string | null | undefined) ?? null,
+            statusIucn: (item.statusIucn as string | null | undefined) ?? null,
+            jantan: toNullableNumber(item.jantan),
+            betina: toNullableNumber(item.betina),
+        }))
+        : hasTslId && body.tslId
+            ? [{
+                tslId: Number(body.tslId),
+                statusPerlindunganNasional: (body.statusPerlindunganNasional as string | null | undefined) ?? null,
+                statusCites: (body.statusCites as string | null | undefined) ?? null,
+                statusIucn: (body.statusIucn as string | null | undefined) ?? null,
+                jantan: toNullableNumber(body.jantan),
+                betina: toNullableNumber(body.betina),
+            }]
+            : [];
+
+    return {
+        ...(hasJumlahTsl || hasTslItems || tslItems.length > 0 ? { jumlahTsl, tslItems } : {}),
+        tslId: tslItems[0]?.tslId ?? null,
+    };
+}
+
+export function validateTslFields(fields: Record<string, unknown>) {
+    if (!("jumlahTsl" in fields) && !("tslItems" in fields)) return null;
+
+    const jumlahTsl = Number(fields.jumlahTsl ?? 1);
+    const tslItems = Array.isArray(fields.tslItems) ? fields.tslItems as { tslId?: unknown }[] : [];
+
+    if (!Number.isInteger(jumlahTsl) || jumlahTsl < 1 || jumlahTsl > 10) {
+        return "Jumlah TSL wajib berupa angka antara 1 hingga 10";
+    }
+
+    if (tslItems.length !== jumlahTsl) {
+        return `Jumlah item referensi TSL harus sesuai dengan jumlahTsl (${jumlahTsl})`;
+    }
+
+    const tslIds = tslItems.map((item) => Number(item.tslId));
+    if (tslIds.some((id) => !Number.isInteger(id) || id < 1)) {
+        return "Setiap item referensi TSL wajib memiliki tslId yang valid";
+    }
+
+    if (new Set(tslIds).size !== tslIds.length) {
+        return "Referensi TSL dalam satu data tidak boleh duplikat";
+    }
+
+    return null;
+}
 
 // ─── buildBaseFields (shared oleh semua modul) ───────────────────────────────
 // Kolom yang persis sama di pengedaran-dn, pengedaran-ln, lembaga-konservasi,
@@ -49,7 +137,7 @@ function buildBaseFields(
         ...("koordinatLokasi" in body && {
             koordinatLokasi: (body.koordinatLokasi as string) ?? null,
         }),
-        ...("tslId" in body && { tslId: body.tslId ? Number(body.tslId) : null }),
+        ...normalizeTslFields(body),
         ...("statusPerlindunganNasional" in body && {
             statusPerlindunganNasional:
                 (body.statusPerlindunganNasional as typeof statusTypes.statusPerlindunganNasional) ?? null,
@@ -67,7 +155,7 @@ function buildBaseFields(
 
 // ─── buildPengedaranFields (pengedaran-dn & pengedaran-ln) ───────────────────
 
-export const buildPengedaranFields = (body: Record<string, unknown>) => ({
+export const buildPengedaranFields = (body: Record<string, unknown>): Record<string, unknown> => ({
     ...buildBaseFields(body, {} as PengedaranInsert),
     ...("namaPengedaran" in body && { namaPengedaran: body.namaPengedaran as string }),
     ...("alamatPengedaran" in body && {
@@ -75,9 +163,19 @@ export const buildPengedaranFields = (body: Record<string, unknown>) => ({
     }),
 });
 
+// ─── buildPenangkaranFields ───────────────────────────────────────────────────
+
+export const buildPenangkaranFields = (body: Record<string, unknown>): Record<string, unknown> => ({
+    ...buildBaseFields(body, {} as PenangkaranInsert),
+    ...("namaPenangkaran" in body && { namaPenangkaran: body.namaPenangkaran as string }),
+    ...("alamatPenangkaran" in body && {
+        alamatPenangkaran: (body.alamatPenangkaran as string) ?? null,
+    }),
+});
+
 // ─── buildLembagaFields ───────────────────────────────────────────────────────
 
-export const buildLembagaFields = (body: Record<string, unknown>) => ({
+export const buildLembagaFields = (body: Record<string, unknown>): Record<string, unknown> => ({
     ...buildBaseFields(body, {} as LembagaInsert),
     ...("namaLembaga" in body && { namaLembaga: body.namaLembaga as string }),
     ...("alamatLembaga" in body && {

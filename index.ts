@@ -10,6 +10,7 @@ import userRoutes from "./src/routes/user.routes";
 import referensiTslRoutes from "./src/routes/referensi-tsl.routes";
 import verifikasiRoutes from "./src/routes/verifikasi.routes";
 import wilayahRoutes from "./src/routes/wilayah.routes";
+import notifikasiRoutes from "./src/routes/notifikasi.routes";
 
 
 dotenv.config();
@@ -47,6 +48,7 @@ app.use("/api/penangkaran", penangkaranRoutes);
 app.use("/api/pengedaran-dn", pengedaranDnRoutes);
 app.use("/api/pengedaran-ln", pengedaranLnRoutes);
 app.use("/api/lembaga-konservasi", lembagaKonservasiRoutes);
+app.use("/api/notifikasi", notifikasiRoutes);
 
 app.get("/", (_req, res) => {
   res.json({ message: "IDAMAN TSL API berjalan ✅" });

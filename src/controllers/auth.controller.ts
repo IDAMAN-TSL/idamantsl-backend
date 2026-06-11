@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../db/index";
-import { users } from "../../db/schema";
+import { users, notifikasi } from "../../db/schema";
 import { randomInt } from "node:crypto";
 import { handleError } from "../helpers/controller.helpers";
 import { sendResetPasswordEmail } from "../helpers/mailer";
@@ -44,6 +44,12 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
+    const unreadNotifications = await db
+      .select({ id: notifikasi.id })
+      .from(notifikasi)
+      .where(and(eq(notifikasi.userId, user.id), eq(notifikasi.status, "unread")));
+    const realUnreadCount = unreadNotifications.length;
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -65,6 +71,8 @@ export const login = async (req: Request, res: Response) => {
           email: user.email,
           role: user.role,
           wilayah: user.wilayah,
+          statusNotifikasi: user.statusNotifikasi,
+          jumlahNotifikasi: realUnreadCount,
         },
       },
     });
@@ -95,9 +103,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
       where: eq(users.email, email),
     });
     if (!user) {
-      return res.status(200).json({
-        success: true,
-        message: "Jika email terdaftar, link reset password akan dikirim",
+      return res.status(404).json({
+        success: false,
+        message: "Email tidak terdaftar dalam sistem",
       });
     }
 
@@ -118,7 +126,6 @@ export const forgotPassword = async (req: Request, res: Response) => {
       await sendResetPasswordEmail(email, resetToken);
     } catch (emailError) {
       console.error("[forgotPassword] Gagal kirim email:", emailError);
-      // Tetap return success agar tidak bocorkan info apakah email terdaftar
     }
 
     return res.status(200).json({
@@ -180,12 +187,25 @@ export const resetPassword = async (req: Request, res: Response) => {
       });
     }
 
+    const passwordHistory = Array.isArray(user.passwordHistory) ? user.passwordHistory : [];
+    const usedPasswordHashes = [user.password, ...passwordHistory].filter(Boolean);
+    for (const passwordHash of usedPasswordHashes) {
+      const isReusedPassword = await bcrypt.compare(newPassword, passwordHash);
+      if (isReusedPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Password baru tidak boleh sama dengan password yang pernah digunakan",
+        });
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     await db
       .update(users)
       .set({
         password: hashedPassword,
+        passwordHistory: [user.password, ...passwordHistory].slice(0, 5),
         resetToken: null,
         resetTokenExpiry: null,
         updatedAt: new Date(),
