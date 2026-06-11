@@ -1,0 +1,1792 @@
+{
+  "id": "d3f0db48-6e25-490d-b721-78fde48c3c7c",
+  "prevId": "3b7b8774-fae0-4062-9fb2-3ed15d2210be",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nama": {
+          "name": "nama",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nomor_telepon": {
+          "name": "nomor_telepon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_kantor": {
+          "name": "alamat_kantor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wilayah_id": {
+          "name": "wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reset_token": {
+          "name": "reset_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reset_token_expiry": {
+          "name": "reset_token_expiry",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password_history": {
+          "name": "password_history",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'[]'::json"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "status_notifikasi": {
+          "name": "status_notifikasi",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "jumlah_notifikasi": {
+          "name": "jumlah_notifikasi",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "users_wilayah_id_wilayah_id_fk": {
+          "name": "users_wilayah_id_wilayah_id_fk",
+          "tableFrom": "users",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wilayah": {
+      "name": "wilayah",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nomor_wilayah": {
+          "name": "nomor_wilayah",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nama_wilayah": {
+          "name": "nama_wilayah",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "alamat_wilayah": {
+          "name": "alamat_wilayah",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tipe_wilayah": {
+          "name": "tipe_wilayah",
+          "type": "tipe_wilayah",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parent_wilayah_id": {
+          "name": "parent_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.referensi_tsl": {
+      "name": "referensi_tsl",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nomor": {
+          "name": "nomor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nama_daerah": {
+          "name": "nama_daerah",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "jenis": {
+          "name": "jenis",
+          "type": "jenis_tsl",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kingdom": {
+          "name": "kingdom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "divisi": {
+          "name": "divisi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kelas": {
+          "name": "kelas",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ordo": {
+          "name": "ordo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "famili": {
+          "name": "famili",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "genus": {
+          "name": "genus",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spesies": {
+          "name": "spesies",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_perlindungan_nasional": {
+          "name": "status_perlindungan_nasional",
+          "type": "status_perlindungan_nasional",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_cites": {
+          "name": "status_cites",
+          "type": "status_cites",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_iucn": {
+          "name": "status_iucn",
+          "type": "status_iucn",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_verifikasi": {
+          "name": "status_verifikasi",
+          "type": "status_verifikasi",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "catatan_verifikasi": {
+          "name": "catatan_verifikasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_changes": {
+          "name": "pending_changes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "referensi_tsl_created_by_users_id_fk": {
+          "name": "referensi_tsl_created_by_users_id_fk",
+          "tableFrom": "referensi_tsl",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "referensi_tsl_nama_daerah_unique": {
+          "name": "referensi_tsl_nama_daerah_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "nama_daerah"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.penangkaran": {
+      "name": "penangkaran",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nama_penangkaran": {
+          "name": "nama_penangkaran",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nomor_sk": {
+          "name": "nomor_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_sk": {
+          "name": "tanggal_sk",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_sk": {
+          "name": "file_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "penerbit": {
+          "name": "penerbit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "akhir_masa_berlaku": {
+          "name": "akhir_masa_berlaku",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nama_direktur": {
+          "name": "nama_direktur",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nomor_telepon": {
+          "name": "nomor_telepon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bidang_wilayah_id": {
+          "name": "bidang_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seksi_wilayah_id": {
+          "name": "seksi_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_kantor": {
+          "name": "alamat_kantor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_penangkaran": {
+          "name": "alamat_penangkaran",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "koordinat_lokasi": {
+          "name": "koordinat_lokasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tsl_id": {
+          "name": "tsl_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "jumlah_tsl": {
+          "name": "jumlah_tsl",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "tsl_items": {
+          "name": "tsl_items",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_perlindungan_nasional": {
+          "name": "status_perlindungan_nasional",
+          "type": "status_perlindungan_nasional",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_cites": {
+          "name": "status_cites",
+          "type": "status_cites",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_iucn": {
+          "name": "status_iucn",
+          "type": "status_iucn",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "jantan": {
+          "name": "jantan",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betina": {
+          "name": "betina",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_verifikasi": {
+          "name": "status_verifikasi",
+          "type": "status_verifikasi",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "catatan_verifikasi": {
+          "name": "catatan_verifikasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_changes": {
+          "name": "pending_changes",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "penangkaran_bidang_wilayah_id_wilayah_id_fk": {
+          "name": "penangkaran_bidang_wilayah_id_wilayah_id_fk",
+          "tableFrom": "penangkaran",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "bidang_wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "penangkaran_seksi_wilayah_id_wilayah_id_fk": {
+          "name": "penangkaran_seksi_wilayah_id_wilayah_id_fk",
+          "tableFrom": "penangkaran",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "seksi_wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "penangkaran_tsl_id_referensi_tsl_id_fk": {
+          "name": "penangkaran_tsl_id_referensi_tsl_id_fk",
+          "tableFrom": "penangkaran",
+          "tableTo": "referensi_tsl",
+          "columnsFrom": [
+            "tsl_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "penangkaran_created_by_users_id_fk": {
+          "name": "penangkaran_created_by_users_id_fk",
+          "tableFrom": "penangkaran",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "penangkaran_updated_by_users_id_fk": {
+          "name": "penangkaran_updated_by_users_id_fk",
+          "tableFrom": "penangkaran",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "penangkaran_nomor_sk_unique": {
+          "name": "penangkaran_nomor_sk_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "nomor_sk"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.pengedaran_dalam_negeri": {
+      "name": "pengedaran_dalam_negeri",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nomor": {
+          "name": "nomor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nama_pengedaran": {
+          "name": "nama_pengedaran",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nomor_sk": {
+          "name": "nomor_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_sk": {
+          "name": "tanggal_sk",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_sk": {
+          "name": "file_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "penerbit": {
+          "name": "penerbit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "akhir_masa_berlaku": {
+          "name": "akhir_masa_berlaku",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nama_direktur": {
+          "name": "nama_direktur",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nomor_telepon": {
+          "name": "nomor_telepon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bidang_wilayah_id": {
+          "name": "bidang_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seksi_wilayah_id": {
+          "name": "seksi_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_kantor": {
+          "name": "alamat_kantor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_pengedaran": {
+          "name": "alamat_pengedaran",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "koordinat_lokasi": {
+          "name": "koordinat_lokasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tsl_id": {
+          "name": "tsl_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "jumlah_tsl": {
+          "name": "jumlah_tsl",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "tsl_items": {
+          "name": "tsl_items",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_perlindungan_nasional": {
+          "name": "status_perlindungan_nasional",
+          "type": "status_perlindungan_nasional",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_cites": {
+          "name": "status_cites",
+          "type": "status_cites",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_iucn": {
+          "name": "status_iucn",
+          "type": "status_iucn",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "jantan": {
+          "name": "jantan",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betina": {
+          "name": "betina",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_verifikasi": {
+          "name": "status_verifikasi",
+          "type": "status_verifikasi",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "catatan_verifikasi": {
+          "name": "catatan_verifikasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_changes": {
+          "name": "pending_changes",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "pengedaran_dalam_negeri_bidang_wilayah_id_wilayah_id_fk": {
+          "name": "pengedaran_dalam_negeri_bidang_wilayah_id_wilayah_id_fk",
+          "tableFrom": "pengedaran_dalam_negeri",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "bidang_wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pengedaran_dalam_negeri_seksi_wilayah_id_wilayah_id_fk": {
+          "name": "pengedaran_dalam_negeri_seksi_wilayah_id_wilayah_id_fk",
+          "tableFrom": "pengedaran_dalam_negeri",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "seksi_wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pengedaran_dalam_negeri_tsl_id_referensi_tsl_id_fk": {
+          "name": "pengedaran_dalam_negeri_tsl_id_referensi_tsl_id_fk",
+          "tableFrom": "pengedaran_dalam_negeri",
+          "tableTo": "referensi_tsl",
+          "columnsFrom": [
+            "tsl_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pengedaran_dalam_negeri_created_by_users_id_fk": {
+          "name": "pengedaran_dalam_negeri_created_by_users_id_fk",
+          "tableFrom": "pengedaran_dalam_negeri",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pengedaran_dalam_negeri_updated_by_users_id_fk": {
+          "name": "pengedaran_dalam_negeri_updated_by_users_id_fk",
+          "tableFrom": "pengedaran_dalam_negeri",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "pengedaran_dn_nomor_sk_unique": {
+          "name": "pengedaran_dn_nomor_sk_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "nomor_sk"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.pengedaran_luar_negeri": {
+      "name": "pengedaran_luar_negeri",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nomor": {
+          "name": "nomor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nama_pengedaran": {
+          "name": "nama_pengedaran",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nomor_sk": {
+          "name": "nomor_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_sk": {
+          "name": "tanggal_sk",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_sk": {
+          "name": "file_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "penerbit": {
+          "name": "penerbit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "akhir_masa_berlaku": {
+          "name": "akhir_masa_berlaku",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nama_direktur": {
+          "name": "nama_direktur",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nomor_telepon": {
+          "name": "nomor_telepon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bidang_wilayah_id": {
+          "name": "bidang_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seksi_wilayah_id": {
+          "name": "seksi_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_kantor": {
+          "name": "alamat_kantor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_pengedaran": {
+          "name": "alamat_pengedaran",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "koordinat_lokasi": {
+          "name": "koordinat_lokasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tsl_id": {
+          "name": "tsl_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "jumlah_tsl": {
+          "name": "jumlah_tsl",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "tsl_items": {
+          "name": "tsl_items",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_perlindungan_nasional": {
+          "name": "status_perlindungan_nasional",
+          "type": "status_perlindungan_nasional",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_cites": {
+          "name": "status_cites",
+          "type": "status_cites",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_iucn": {
+          "name": "status_iucn",
+          "type": "status_iucn",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "jantan": {
+          "name": "jantan",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betina": {
+          "name": "betina",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_verifikasi": {
+          "name": "status_verifikasi",
+          "type": "status_verifikasi",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "catatan_verifikasi": {
+          "name": "catatan_verifikasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_changes": {
+          "name": "pending_changes",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "pengedaran_luar_negeri_bidang_wilayah_id_wilayah_id_fk": {
+          "name": "pengedaran_luar_negeri_bidang_wilayah_id_wilayah_id_fk",
+          "tableFrom": "pengedaran_luar_negeri",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "bidang_wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pengedaran_luar_negeri_seksi_wilayah_id_wilayah_id_fk": {
+          "name": "pengedaran_luar_negeri_seksi_wilayah_id_wilayah_id_fk",
+          "tableFrom": "pengedaran_luar_negeri",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "seksi_wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pengedaran_luar_negeri_tsl_id_referensi_tsl_id_fk": {
+          "name": "pengedaran_luar_negeri_tsl_id_referensi_tsl_id_fk",
+          "tableFrom": "pengedaran_luar_negeri",
+          "tableTo": "referensi_tsl",
+          "columnsFrom": [
+            "tsl_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pengedaran_luar_negeri_created_by_users_id_fk": {
+          "name": "pengedaran_luar_negeri_created_by_users_id_fk",
+          "tableFrom": "pengedaran_luar_negeri",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pengedaran_luar_negeri_updated_by_users_id_fk": {
+          "name": "pengedaran_luar_negeri_updated_by_users_id_fk",
+          "tableFrom": "pengedaran_luar_negeri",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "pengedaran_ln_nomor_sk_unique": {
+          "name": "pengedaran_ln_nomor_sk_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "nomor_sk"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.lembaga_konservasi": {
+      "name": "lembaga_konservasi",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nomor": {
+          "name": "nomor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nama_lembaga": {
+          "name": "nama_lembaga",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nomor_sk": {
+          "name": "nomor_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_sk": {
+          "name": "tanggal_sk",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_sk": {
+          "name": "file_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "penerbit": {
+          "name": "penerbit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "akhir_masa_berlaku": {
+          "name": "akhir_masa_berlaku",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nama_direktur": {
+          "name": "nama_direktur",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nomor_telepon": {
+          "name": "nomor_telepon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bidang_wilayah_id": {
+          "name": "bidang_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seksi_wilayah_id": {
+          "name": "seksi_wilayah_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_kantor": {
+          "name": "alamat_kantor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_lembaga": {
+          "name": "alamat_lembaga",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "koordinat_lokasi": {
+          "name": "koordinat_lokasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tsl_id": {
+          "name": "tsl_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "jumlah_tsl": {
+          "name": "jumlah_tsl",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "tsl_items": {
+          "name": "tsl_items",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_perlindungan_nasional": {
+          "name": "status_perlindungan_nasional",
+          "type": "status_perlindungan_nasional",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_cites": {
+          "name": "status_cites",
+          "type": "status_cites",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_iucn": {
+          "name": "status_iucn",
+          "type": "status_iucn",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "jantan": {
+          "name": "jantan",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betina": {
+          "name": "betina",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_verifikasi": {
+          "name": "status_verifikasi",
+          "type": "status_verifikasi",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "catatan_verifikasi": {
+          "name": "catatan_verifikasi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_changes": {
+          "name": "pending_changes",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "lembaga_konservasi_bidang_wilayah_id_wilayah_id_fk": {
+          "name": "lembaga_konservasi_bidang_wilayah_id_wilayah_id_fk",
+          "tableFrom": "lembaga_konservasi",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "bidang_wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "lembaga_konservasi_seksi_wilayah_id_wilayah_id_fk": {
+          "name": "lembaga_konservasi_seksi_wilayah_id_wilayah_id_fk",
+          "tableFrom": "lembaga_konservasi",
+          "tableTo": "wilayah",
+          "columnsFrom": [
+            "seksi_wilayah_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "lembaga_konservasi_tsl_id_referensi_tsl_id_fk": {
+          "name": "lembaga_konservasi_tsl_id_referensi_tsl_id_fk",
+          "tableFrom": "lembaga_konservasi",
+          "tableTo": "referensi_tsl",
+          "columnsFrom": [
+            "tsl_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "lembaga_konservasi_created_by_users_id_fk": {
+          "name": "lembaga_konservasi_created_by_users_id_fk",
+          "tableFrom": "lembaga_konservasi",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "lembaga_konservasi_updated_by_users_id_fk": {
+          "name": "lembaga_konservasi_updated_by_users_id_fk",
+          "tableFrom": "lembaga_konservasi",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "lembaga_konservasi_nomor_sk_unique": {
+          "name": "lembaga_konservasi_nomor_sk_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "nomor_sk"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.verifikasi_log": {
+      "name": "verifikasi_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tabel_target": {
+          "name": "tabel_target",
+          "type": "tabel_target",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "jenis_pengajuan": {
+          "name": "jenis_pengajuan",
+          "type": "jenis_pengajuan",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "status_verifikasi",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "catatan": {
+          "name": "catatan",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "verifikasi_oleh": {
+          "name": "verifikasi_oleh",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "verifikasi_log_created_by_users_id_fk": {
+          "name": "verifikasi_log_created_by_users_id_fk",
+          "tableFrom": "verifikasi_log",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "verifikasi_log_verifikasi_oleh_users_id_fk": {
+          "name": "verifikasi_log_verifikasi_oleh_users_id_fk",
+          "tableFrom": "verifikasi_log",
+          "tableTo": "users",
+          "columnsFrom": [
+            "verifikasi_oleh"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.notifikasi": {
+      "name": "notifikasi",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "status_notifikasi",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unread'"
+        },
+        "tabel_target": {
+          "name": "tabel_target",
+          "type": "tabel_target",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nomor_sk": {
+          "name": "nomor_sk",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_kadaluarsa": {
+          "name": "tanggal_kadaluarsa",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "judul": {
+          "name": "judul",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pesan": {
+          "name": "pesan",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "notifikasi_user_id_users_id_fk": {
+          "name": "notifikasi_user_id_users_id_fk",
+          "tableFrom": "notifikasi",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "notifikasi_user_target_unique": {
+          "name": "notifikasi_user_target_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "tabel_target",
+            "target_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.jenis_pengajuan": {
+      "name": "jenis_pengajuan",
+      "schema": "public",
+      "values": [
+        "tambah",
+        "perbarui",
+        "hapus"
+      ]
+    },
+    "public.jenis_tsl": {
+      "name": "jenis_tsl",
+      "schema": "public",
+      "values": [
+        "tumbuhan",
+        "satwa_liar"
+      ]
+    },
+    "public.role": {
+      "name": "role",
+      "schema": "public",
+      "values": [
+        "admin_pusat",
+        "bidang_wilayah",
+        "seksi_wilayah"
+      ]
+    },
+    "public.status_cites": {
+      "name": "status_cites",
+      "schema": "public",
+      "values": [
+        "non_apendiks",
+        "apendiks_i",
+        "apendiks_ii",
+        "apendiks_iii"
+      ]
+    },
+    "public.status_iucn": {
+      "name": "status_iucn",
+      "schema": "public",
+      "values": [
+        "tidak_dievaluasi",
+        "data_tidak_cukup",
+        "risiko_rendah",
+        "hampir_terancam",
+        "rentan",
+        "terancam_punah",
+        "sangat_terancam_punah",
+        "punah_di_alam",
+        "punah"
+      ]
+    },
+    "public.status_notifikasi": {
+      "name": "status_notifikasi",
+      "schema": "public",
+      "values": [
+        "unread",
+        "read"
+      ]
+    },
+    "public.status_perlindungan_nasional": {
+      "name": "status_perlindungan_nasional",
+      "schema": "public",
+      "values": [
+        "tidak_dilindungi",
+        "dilindungi"
+      ]
+    },
+    "public.status_verifikasi": {
+      "name": "status_verifikasi",
+      "schema": "public",
+      "values": [
+        "pending",
+        "disetujui",
+        "ditolak"
+      ]
+    },
+    "public.tabel_target": {
+      "name": "tabel_target",
+      "schema": "public",
+      "values": [
+        "penangkaran",
+        "pengedaran_dalam_negeri",
+        "pengedaran_luar_negeri",
+        "lembaga_konservasi",
+        "referensi_tsl"
+      ]
+    },
+    "public.tipe_wilayah": {
+      "name": "tipe_wilayah",
+      "schema": "public",
+      "values": [
+        "bidang",
+        "seksi"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

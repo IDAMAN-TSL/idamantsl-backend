@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, isNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "../../db";
-import { users, wilayah, referensiTsl, penangkaran, verifikasiLog } from "../../db/schema";
+import { users, wilayah } from "../../db/schema";
 import { handleError, validateId } from "../helpers/controller.helpers";
 
 const USER_SELECT_FIELDS = {
@@ -27,7 +27,7 @@ async function findUserById(id: number) {
   const result = await db
     .select()
     .from(users)
-    .where(eq(users.id, id))
+    .where(and(eq(users.id, id), isNull(users.deletedAt)))
     .limit(1);
   return result[0] ?? null;
 }
@@ -49,7 +49,7 @@ async function validateWilayahForRole(
   role: string
 ): Promise<{ error: string; status: number } | null> {
   const parsedWilayahId = Number(wilayahId);
-  if (isNaN(parsedWilayahId)) {
+  if (Number.isNaN(parsedWilayahId)) {
     return { error: "wilayahId harus berupa angka", status: 400 };
   }
 
@@ -99,6 +99,7 @@ export async function getAllUsers(req: Request, res: Response) {
       .select(USER_SELECT_FIELDS)
       .from(users)
       .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
+      .where(isNull(users.deletedAt))
       .orderBy(users.createdAt);
 
     res.status(200).json({ data: result });
@@ -118,7 +119,7 @@ export async function getUserById(req: Request, res: Response) {
       .select(USER_SELECT_FIELDS)
       .from(users)
       .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
-      .where(eq(users.id, id))
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
       .limit(1);
 
     if (!result[0]) {
@@ -204,6 +205,42 @@ export async function createUser(req: Request, res: Response) {
 
 // ─── PUT /api/users/:id ───────────────────────────────────────────────────────
 
+async function validateUpdateData(
+  id: number,
+  email: string | undefined,
+  role: string | undefined,
+  wilayahId: number | undefined | null,
+  password: unknown,
+  existingRole: string
+): Promise<{ error: string; status: number } | null> {
+  if (role && !VALID_ROLES.includes(role as UserRole)) {
+    return { error: "Role tidak valid", status: 400 };
+  }
+
+  const passwordError = validateOptionalPassword(password);
+  if (passwordError) return passwordError;
+
+  if (wilayahId !== undefined && wilayahId !== null) {
+    const targetRole = role ?? existingRole;
+    const wilayahError = await validateWilayahForRole(wilayahId, targetRole);
+    if (wilayahError) return wilayahError;
+  }
+
+  if (email) {
+    const duplicate = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.email, email), ne(users.id, id)))
+      .limit(1);
+
+    if (duplicate[0]) {
+      return { error: "Email sudah digunakan user lain", status: 409 };
+    }
+  }
+
+  return null;
+}
+
 export async function updateUser(req: Request, res: Response) {
   try {
     const id = validateId(req.params.id, res);
@@ -217,37 +254,10 @@ export async function updateUser(req: Request, res: Response) {
 
     const { nama, email, role, wilayahId, password, nomorTelepon, alamatKantor } = buildUserFields(req.body);
 
-    if (role && !VALID_ROLES.includes(role as UserRole)) {
-      res.status(400).json({ message: "Role tidak valid" });
+    const validationError = await validateUpdateData(id, email, role, wilayahId, password, existing.role);
+    if (validationError) {
+      res.status(validationError.status).json({ message: validationError.error });
       return;
-    }
-
-    const passwordError = validateOptionalPassword(password);
-    if (passwordError) {
-      res.status(passwordError.status).json({ message: passwordError.error });
-      return;
-    }
-
-    if (wilayahId) {
-      const targetRole = role ?? existing.role;
-      const wilayahError = await validateWilayahForRole(wilayahId, targetRole);
-      if (wilayahError) {
-        res.status(wilayahError.status).json({ message: wilayahError.error });
-        return;
-      }
-    }
-
-    if (email) {
-      const duplicate = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(and(eq(users.email, email), ne(users.id, id)))
-        .limit(1);
-
-      if (duplicate[0]) {
-        res.status(409).json({ message: "Email sudah digunakan user lain" });
-        return;
-      }
     }
 
     const updateData: Partial<typeof users.$inferInsert> = {};
@@ -303,24 +313,10 @@ export async function deleteUser(req: Request, res: Response) {
       return;
     }
 
-    // Null-kan semua FK yang merujuk ke user ini sebelum hapus
-    await db.update(referensiTsl)
-      .set({ createdBy: null })
-      .where(eq(referensiTsl.createdBy, id));
-
-    await db.update(penangkaran)
-      .set({ createdBy: null })
-      .where(eq(penangkaran.createdBy, id));
-
-    await db.update(penangkaran)
-      .set({ updatedBy: null })
-      .where(eq(penangkaran.updatedBy, id));
-
-    await db.update(verifikasiLog)
-      .set({ verifikasiOleh: null })
-      .where(eq(verifikasiLog.verifikasiOleh, id));
-
-    await db.delete(users).where(eq(users.id, id));
+    // Melakukan soft delete: tandai deletedAt dan nonaktifkan akun
+    await db.update(users)
+      .set({ deletedAt: new Date(), isActive: false })
+      .where(eq(users.id, id));
     res.status(200).json({ message: "User berhasil dihapus" });
   } catch (error) {
     return handleError(res, error, "deleteUser", "Gagal menghapus user");

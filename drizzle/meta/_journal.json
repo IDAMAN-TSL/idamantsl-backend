@@ -22,6 +22,13 @@
       "when": 1780991632079,
       "tag": "0002_mysterious_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781169080590,
+      "tag": "0003_flippant_ogun",
+      "breakpoints": true
     }
   ]
 }
