@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../../db/index";
 import { users, notifikasi } from "../../db/schema";
 import { randomInt } from "node:crypto";
@@ -27,6 +27,12 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({
         success: false,
         message: "Email atau password salah",
+      });
+    }
+    if (user.deletedAt !== null) {
+      return res.status(403).json({
+        success: false,
+        message: "Akun ini telah dihapus.",
       });
     }
     if (!user.isActive) {
@@ -100,7 +106,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     }
 
     const user = await db.query.users.findFirst({
-      where: eq(users.email, email),
+      where: and(eq(users.email, email), isNull(users.deletedAt)),
     });
     if (!user) {
       return res.status(404).json({

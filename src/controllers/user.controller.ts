@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, isNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "../../db";
 import { users, wilayah, referensiTsl, penangkaran, verifikasiLog } from "../../db/schema";
@@ -27,7 +27,7 @@ async function findUserById(id: number) {
   const result = await db
     .select()
     .from(users)
-    .where(eq(users.id, id))
+    .where(and(eq(users.id, id), isNull(users.deletedAt)))
     .limit(1);
   return result[0] ?? null;
 }
@@ -99,6 +99,7 @@ export async function getAllUsers(req: Request, res: Response) {
       .select(USER_SELECT_FIELDS)
       .from(users)
       .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
+      .where(isNull(users.deletedAt))
       .orderBy(users.createdAt);
 
     res.status(200).json({ data: result });
@@ -118,7 +119,7 @@ export async function getUserById(req: Request, res: Response) {
       .select(USER_SELECT_FIELDS)
       .from(users)
       .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
-      .where(eq(users.id, id))
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
       .limit(1);
 
     if (!result[0]) {
@@ -303,24 +304,10 @@ export async function deleteUser(req: Request, res: Response) {
       return;
     }
 
-    // Null-kan semua FK yang merujuk ke user ini sebelum hapus
-    await db.update(referensiTsl)
-      .set({ createdBy: null })
-      .where(eq(referensiTsl.createdBy, id));
-
-    await db.update(penangkaran)
-      .set({ createdBy: null })
-      .where(eq(penangkaran.createdBy, id));
-
-    await db.update(penangkaran)
-      .set({ updatedBy: null })
-      .where(eq(penangkaran.updatedBy, id));
-
-    await db.update(verifikasiLog)
-      .set({ verifikasiOleh: null })
-      .where(eq(verifikasiLog.verifikasiOleh, id));
-
-    await db.delete(users).where(eq(users.id, id));
+    // Melakukan soft delete: tandai deletedAt dan nonaktifkan akun
+    await db.update(users)
+      .set({ deletedAt: new Date(), isActive: false })
+      .where(eq(users.id, id));
     res.status(200).json({ message: "User berhasil dihapus" });
   } catch (error) {
     return handleError(res, error, "deleteUser", "Gagal menghapus user");
