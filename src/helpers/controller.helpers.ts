@@ -154,7 +154,7 @@ export const handleError = (
 
   if (dbError.code === "23505") {
     let constraintMessage = "Data duplikat tidak diperbolehkan";
-    
+
     if (dbError.constraint?.includes("nama_daerah") || dbError.detail?.includes("nama_daerah")) {
       constraintMessage = "Nama daerah sudah terdaftar";
     } else if (dbError.constraint?.includes("nomor_sk") || dbError.detail?.includes("nomor_sk")) {

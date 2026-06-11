@@ -317,6 +317,10 @@ export async function deleteUser(req: Request, res: Response) {
       .where(eq(penangkaran.updatedBy, id));
 
     await db.update(verifikasiLog)
+      .set({ createdBy: null })
+      .where(eq(verifikasiLog.createdBy, id));
+
+    await db.update(verifikasiLog)
       .set({ verifikasiOleh: null })
       .where(eq(verifikasiLog.verifikasiOleh, id));
 

@@ -172,9 +172,7 @@ function validateBaseFields(
 async function findPendingRecord(
   tabel: TabelTarget,
   targetId: number,
-): Promise<
-  { record: Record<string, unknown> } | { error: string; status: number }
-> {
+): Promise<{ record: Record<string, unknown> } | { error: string; status: number }> {
   const record = await getTableDef(tabel).find(targetId);
   if (!record) return { error: "Data tidak ditemukan", status: 404 };
   if (record.statusVerifikasi !== "pending") {

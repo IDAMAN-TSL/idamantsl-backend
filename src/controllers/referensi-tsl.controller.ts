@@ -101,6 +101,8 @@ const SELECT_FIELDS = {
   statusIucn: referensiTsl.statusIucn,
   statusVerifikasi: referensiTsl.statusVerifikasi,
   catatanVerifikasi: referensiTsl.catatanVerifikasi,
+  // Diperlukan oleh frontend non-admin untuk mendeteksi jenis pengajuan
+  // (Tambah / Perbarui / Hapus) tanpa akses ke /api/verifikasi/*
   pendingChanges: referensiTsl.pendingChanges,
   createdBy: referensiTsl.createdBy,
   namaInputor: users.nama,
@@ -237,6 +239,13 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
     if (!validated) return;
     const { id, user, existing } = validated;
 
+    if (isNotOwner(user.role, existing.createdBy, user.id)) {
+      res
+        .status(403)
+        .json({ message: "Tidak memiliki akses untuk mengubah data ini" });
+      return;
+    }
+
     if (user.role === "bidang_wilayah") {
       if (existing.statusVerifikasi === "pending") {
         res.status(403).json({
@@ -270,10 +279,12 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
         .where(eq(referensiTsl.id, id))
         .returning();
 
-      res.status(200).json({
-        message: "Perubahan telah diajukan, menunggu persetujuan admin",
-        data: updated,
-      });
+      res
+        .status(200)
+        .json({
+          message: "Perubahan telah diajukan, menunggu persetujuan admin",
+          data: updated,
+        });
       return;
     }
 
@@ -333,6 +344,23 @@ export async function deleteReferensi(req: AuthRequest, res: Response) {
     }
 
     if (user.role === "bidang_wilayah") {
+      if (existing.statusVerifikasi === "pending") {
+        res
+          .status(403)
+          .json({
+            message:
+              "Data sedang menunggu persetujuan admin, tidak bisa dihapus",
+          });
+        return;
+      }
+      if (existing.statusVerifikasi === "ditolak") {
+        res.status(403).json({
+          message: "Data ditolak oleh admin",
+          catatanVerifikasi: existing.catatanVerifikasi,
+        });
+        return;
+      }
+
       await db
         .update(referensiTsl)
         .set({
@@ -353,6 +381,7 @@ export async function deleteReferensi(req: AuthRequest, res: Response) {
     return handleError(res, error, "deleteReferensi", "Gagal menghapus referensi TSL");
   }
 }
+
 
 // ─── DELETE /api/referensi-tsl/bulk ──────────────────────────────────────────
 
