@@ -313,6 +313,7 @@ describe("Referensi TSL Controller", () => {
 
     it("201 - admin_pusat tambah data → langsung disetujui", async () => {
       setUser(mockAdmin);
+      mockSelect([]);
       mockInsert([{ ...validPayload, id: 2, statusVerifikasi: "disetujui", createdBy: 1 }]);
 
       const res = await request(app)

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { eq, ilike } from "drizzle-orm";
 import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
@@ -80,26 +80,7 @@ function validateReferensiFieldsData(fields: any): string | null {
   return null;
 }
 
-function validateTaxonomyFields(fields: ReturnType<typeof buildReferensiFields>) {
-  for (const field of TAXONOMY_FIELDS) {
-    const value = fields[field];
-    if (value === undefined || value === null || value === "") continue;
-    if (typeof value !== "string" || !TAXONOMY_PATTERN.test(value)) {
-      return `${field} harus berupa huruf`;
-    }
-  }
 
-  return null;
-}
-
-function validateReferensiFieldsData(fields: any): string | null {
-  if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
-    return "Jenis TSL tidak valid";
-  }
-  const taxonomyError = validateTaxonomyFields(fields);
-  if (taxonomyError) return taxonomyError;
-  return null;
-}
 
 // ─── SELECT_FIELDS ────────────────────────────────────────────────────────────
 
@@ -206,6 +187,21 @@ export async function createReferensi(req: AuthRequest, res: Response) {
 
     const statusVerifikasi =
       user.role === "admin_pusat" ? "disetujui" : "pending";
+
+    // Cek duplikat namaDaerah (case-insensitive)
+    const duplicate = await db
+      .select({ id: referensiTsl.id })
+      .from(referensiTsl)
+      .where(ilike(referensiTsl.namaDaerah, fields.namaDaerah!))
+      .limit(1);
+
+    if (duplicate.length > 0) {
+      res.status(409).json({
+        message: `Nama daerah "${fields.namaDaerah}" sudah terdaftar dalam referensi TSL.`,
+        field: "namaDaerah",
+      });
+      return;
+    }
 
     const [newData] = await db
       .insert(referensiTsl)

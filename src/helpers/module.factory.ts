@@ -29,6 +29,7 @@ const withRelations = {
     seksiWilayah: true,
     tsl: true,
     createdBy: { columns: { id: true, nama: true, role: true } },
+    updatedBy: { columns: { id: true, nama: true, role: true } },
 } as const;
 
 // ─── Opsi factory ────────────────────────────────────────────────────────────
