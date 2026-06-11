@@ -3,10 +3,10 @@ import { eq, ilike } from "drizzle-orm";
 import { db } from "../../db";
 import { referensiTsl, users } from "../../db/schema";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { handleError, validateId, bulkDeleteHandler } from "../helpers/controller.helpers";
+import { handleError, validateId, bulkDeleteHandler, isNotOwner } from "../helpers/controller.helpers";
 import { checkReferensiDependencies } from "../helpers/referensi-deps";
 
-const VALID_JENIS = ["tumbuhan", "satwa_liar"];
+const VALID_JENIS = new Set(["tumbuhan", "satwa_liar"]);
 const TAXONOMY_FIELDS = ["kingdom", "divisi", "kelas", "ordo", "famili", "genus", "spesies"] as const;
 const TAXONOMY_PATTERN = /^[A-Za-z\s]+$/;
 
@@ -72,7 +72,7 @@ function validateTaxonomyFields(fields: ReturnType<typeof buildReferensiFields>)
 }
 
 function validateReferensiFieldsData(fields: any): string | null {
-  if (fields.jenis && !VALID_JENIS.includes(fields.jenis)) {
+  if (fields.jenis && !VALID_JENIS.has(fields.jenis)) {
     return "Jenis TSL tidak valid";
   }
   const taxonomyError = validateTaxonomyFields(fields);
@@ -173,7 +173,7 @@ export async function getReferensiById(req: AuthRequest, res: Response) {
 
 export async function createReferensi(req: AuthRequest, res: Response) {
   try {
-    const user = req.user!;
+    const user = req.user;
     const fields = buildReferensiFields(req.body);
 
     if (!fields.namaDaerah || !fields.jenis) {
@@ -194,7 +194,7 @@ export async function createReferensi(req: AuthRequest, res: Response) {
     const duplicate = await db
       .select({ id: referensiTsl.id })
       .from(referensiTsl)
-      .where(ilike(referensiTsl.namaDaerah, fields.namaDaerah!))
+      .where(ilike(referensiTsl.namaDaerah, fields.namaDaerah))
       .limit(1);
 
     if (duplicate.length > 0) {
@@ -220,7 +220,7 @@ async function getValidatedExistingReferensi(req: AuthRequest, res: Response) {
   const id = validateId(req.params.id, res);
   if (id === null) return null;
 
-  const user = req.user!;
+  const user = req.user;
   const existing = await findReferensiById(id);
 
   if (!existing) {
@@ -233,6 +233,76 @@ async function getValidatedExistingReferensi(req: AuthRequest, res: Response) {
 
 // ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────────
 
+async function handleBidangUpdate(
+  res: Response,
+  user: any,
+  existing: any,
+  id: number,
+  fields: any
+) {
+  if (existing.statusVerifikasi === "pending") {
+    return res.status(403).json({
+      message: "Data sedang menunggu persetujuan admin, tidak bisa diubah",
+    });
+  }
+  if (existing.statusVerifikasi === "ditolak") {
+    return res.status(403).json({
+      message: "Data ditolak oleh admin",
+      catatanVerifikasi: existing.catatanVerifikasi,
+    });
+  }
+
+  const [updated] = await db
+    .update(referensiTsl)
+    .set({
+      pendingChanges: { ...fields, diajukanOleh: user.id },
+      statusVerifikasi: "pending",
+      createdBy: existing.createdBy ?? user.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(referensiTsl.id, id))
+    .returning();
+
+  return res.status(200).json({
+    message: "Perubahan telah diajukan, menunggu persetujuan admin",
+    data: updated,
+  });
+}
+
+function buildAdminUpdateData(fields: any) {
+  const updateData: Partial<typeof referensiTsl.$inferInsert> = {};
+  if (fields.nomor !== undefined) updateData.nomor = fields.nomor;
+  if (fields.namaDaerah) updateData.namaDaerah = fields.namaDaerah;
+  if (fields.jenis) updateData.jenis = fields.jenis;
+
+  const taxonomyFields = ["kingdom", "divisi", "kelas", "ordo", "famili", "genus", "spesies"] as const;
+  taxonomyFields.forEach((f) => {
+    if (fields[f] !== undefined) {
+      updateData[f] = fields[f];
+    }
+  });
+
+  if (fields.statusPerlindunganNasional !== undefined) updateData.statusPerlindunganNasional = fields.statusPerlindunganNasional;
+  if (fields.statusCites !== undefined) updateData.statusCites = fields.statusCites;
+  if (fields.statusIucn !== undefined) updateData.statusIucn = fields.statusIucn;
+  if (fields.catatanVerifikasi !== undefined) updateData.catatanVerifikasi = fields.catatanVerifikasi;
+
+  return updateData;
+}
+
+async function handleAdminUpdate(res: Response, id: number, fields: any) {
+  const updateData = buildAdminUpdateData(fields);
+  const [updated] = await db
+    .update(referensiTsl)
+    .set({ ...updateData, updatedAt: new Date() })
+    .where(eq(referensiTsl.id, id))
+    .returning();
+
+  return res.status(200).json({ message: "Referensi TSL berhasil diperbarui", data: updated });
+}
+
+// ─── PUT /api/referensi-tsl/:id ───────────────────────────────────────────────
+
 export async function updateReferensi(req: AuthRequest, res: Response) {
   try {
     const validated = await getValidatedExistingReferensi(req, res);
@@ -240,86 +310,22 @@ export async function updateReferensi(req: AuthRequest, res: Response) {
     const { id, user, existing } = validated;
 
     if (isNotOwner(user.role, existing.createdBy, user.id)) {
-      res
-        .status(403)
-        .json({ message: "Tidak memiliki akses untuk mengubah data ini" });
+      res.status(403).json({ message: "Tidak memiliki akses untuk mengubah data ini" });
       return;
     }
 
-    if (user.role === "bidang_wilayah") {
-      if (existing.statusVerifikasi === "pending") {
-        res.status(403).json({
-          message: "Data sedang menunggu persetujuan admin, tidak bisa diubah",
-        });
-        return;
-      }
-      if (existing.statusVerifikasi === "ditolak") {
-        res.status(403).json({
-          message: "Data ditolak oleh admin",
-          catatanVerifikasi: existing.catatanVerifikasi,
-        });
-        return;
-      }
-
-      const fields = buildReferensiFields(req.body);
-      const validationErr = validateReferensiFieldsData(fields);
-      if (validationErr) {
-        res.status(400).json({ message: validationErr });
-        return;
-      }
-
-      const [updated] = await db
-        .update(referensiTsl)
-        .set({
-          pendingChanges: { ...fields, diajukanOleh: user.id },
-          statusVerifikasi: "pending",
-          createdBy: existing.createdBy ?? user.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(referensiTsl.id, id))
-        .returning();
-
-      res
-        .status(200)
-        .json({
-          message: "Perubahan telah diajukan, menunggu persetujuan admin",
-          data: updated,
-        });
-      return;
-    }
-
-    // admin_pusat → langsung update, hanya field yang ada di body
     const fields = buildReferensiFields(req.body);
-
     const validationErr = validateReferensiFieldsData(fields);
     if (validationErr) {
       res.status(400).json({ message: validationErr });
       return;
     }
 
-    const updateData: Partial<typeof referensiTsl.$inferInsert> = {};
-    if (fields.nomor !== undefined) updateData.nomor = fields.nomor;
-    if (fields.namaDaerah) updateData.namaDaerah = fields.namaDaerah;
-    if (fields.jenis) updateData.jenis = fields.jenis;
-    if (fields.kingdom !== undefined) updateData.kingdom = fields.kingdom;
-    if (fields.divisi !== undefined) updateData.divisi = fields.divisi;
-    if (fields.kelas !== undefined) updateData.kelas = fields.kelas;
-    if (fields.ordo !== undefined) updateData.ordo = fields.ordo;
-    if (fields.famili !== undefined) updateData.famili = fields.famili;
-    if (fields.genus !== undefined) updateData.genus = fields.genus;
-    if (fields.spesies !== undefined) updateData.spesies = fields.spesies;
-    if (fields.statusPerlindunganNasional !== undefined) updateData.statusPerlindunganNasional = fields.statusPerlindunganNasional;
-    if (fields.statusCites !== undefined) updateData.statusCites = fields.statusCites;
-    if (fields.statusIucn !== undefined) updateData.statusIucn = fields.statusIucn;
-    if (fields.catatanVerifikasi !== undefined) updateData.catatanVerifikasi = fields.catatanVerifikasi;
+    if (user.role === "bidang_wilayah") {
+      return await handleBidangUpdate(res, user, existing, id, fields);
+    }
 
-    const [updated] = await db
-      .update(referensiTsl)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(referensiTsl.id, id))
-      .returning();
-
-    res.status(200).json({ message: "Referensi TSL berhasil diperbarui", data: updated });
+    return await handleAdminUpdate(res, id, fields);
   } catch (error) {
     return handleError(res, error, "updateReferensi", "Gagal memperbarui referensi TSL");
   }
@@ -394,7 +400,7 @@ export const bulkDeleteReferensi = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const numericIds = ids.map(Number).filter((id: number) => !isNaN(id));
+    const numericIds = ids.map(Number).filter((id: number) => !Number.isNaN(id));
     if (numericIds.length !== ids.length) {
       res.status(400).json({ success: false, message: "Semua id harus berupa angka" });
       return;
