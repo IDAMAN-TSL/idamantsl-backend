@@ -1,24 +1,9 @@
-/**
- * mailer.ts
- *
- * Helper untuk mengirim email menggunakan nodemailer.
- * Konfigurasi SMTP diambil dari environment variables.
- *
- * Env yang dibutuhkan:
- *   SMTP_HOST=smtp.gmail.com
- *   SMTP_PORT=587
- *   SMTP_USER=emailkamu@gmail.com
- *   SMTP_PASS=app-password-16-karakter
- *   SMTP_FROM="IDAMAN TSL <emailkamu@gmail.com>"
- *   FRONTEND_URL=http://localhost:3000
- */
-
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: false, // true untuk port 465, false untuk 587
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT),
+    secure: false,
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -29,7 +14,7 @@ export async function sendResetPasswordEmail(
     toEmail: string,
     resetToken: string
 ): Promise<void> {
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const frontendUrl = process.env.FRONTEND_URL;
     const resetLink = `${frontendUrl}/forgot-password/reset?email=${encodeURIComponent(toEmail)}&token=${resetToken}`;
 
     const html = `
@@ -68,10 +53,25 @@ export async function sendResetPasswordEmail(
     </div>
   `;
 
+    const text = `
+IDAMAN TSL - Sistem Informasi Data Pemanfaatan TSL
+Reset Password
+
+Kami menerima permintaan untuk mereset password akun Anda.
+Silakan salin dan buka link berikut di browser Anda untuk membuat password baru:
+${resetLink}
+
+Link ini akan kadaluarsa dalam 15 menit. Jika Anda tidak meminta reset password, abaikan email ini.
+
+© 2026 BBKSDA Jawa Barat.
+    `.trim();
+
     await transporter.sendMail({
-        from: process.env.SMTP_FROM || "IDAMAN TSL <noreply@bbksda-jabar.id>",
+        from: process.env.SMTP_FROM,
+        replyTo: process.env.SMTP_USER,
         to: toEmail,
         subject: "[IDAMAN TSL] Reset Password Anda",
+        text,
         html,
     });
 }

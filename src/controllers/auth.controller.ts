@@ -50,11 +50,14 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    const unreadNotifications = await db
-      .select({ id: notifikasi.id })
-      .from(notifikasi)
-      .where(and(eq(notifikasi.userId, user.id), eq(notifikasi.status, "unread")));
-    const realUnreadCount = unreadNotifications.length;
+    let realUnreadCount = 0;
+    if (user.role !== "seksi_wilayah") {
+      const unreadNotifications = await db
+        .select({ id: notifikasi.id })
+        .from(notifikasi)
+        .where(and(eq(notifikasi.userId, user.id), eq(notifikasi.status, "unread")));
+      realUnreadCount = unreadNotifications.length;
+    }
 
     const token = jwt.sign(
       {
