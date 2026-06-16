@@ -157,6 +157,30 @@ describe("Notifikasi Controller", () => {
       expect(res.status).toBe(500);
       expect(res.body.message).toBe("Gagal mengambil data notifikasi");
     });
+
+    it("200 - admin_pusat sync SK kadaluarsa", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue({ ...mockUser, role: "admin_pusat" });
+      mockSyncAndUnreadCount();
+      (db.query.notifikasi.findMany as jest.Mock).mockResolvedValue([]);
+
+      const res = await request(app)
+        .get("/api/notifikasi")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(200);
+    });
+
+    it("200 - seksi_wilayah dikembalikan 0", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue({ ...mockUser, role: "seksi_wilayah" });
+
+      const res = await request(app)
+        .get("/api/notifikasi")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Seksi wilayah tidak memiliki fitur notifikasi");
+      expect(res.body.total).toBe(0);
+    });
   });
 
   describe("PUT /api/notifikasi/:id/read", () => {
@@ -188,6 +212,19 @@ describe("Notifikasi Controller", () => {
         .set("Authorization", TOKEN);
 
       expect(res.status).toBe(404);
+    });
+
+    it("500 - error saat updateNotifikasiStatus", async () => {
+      (db.update as jest.Mock).mockImplementation(() => {
+        throw new Error("DB error");
+      });
+
+      const res = await request(app)
+        .put("/api/notifikasi/1/read")
+        .set("Authorization", TOKEN);
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal memperbarui notifikasi");
     });
   });
 
@@ -248,6 +285,46 @@ describe("Notifikasi Controller", () => {
 
       expect(res.status).toBe(500);
       expect(res.body.message).toBe("Gagal memperbarui notifikasi");
+    });
+  });
+
+  describe("PUT /api/notifikasi/settings", () => {
+    it("200 - toggle notification settings", async () => {
+      (db.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue(true),
+        }),
+      });
+
+      const res = await request(app)
+        .put("/api/notifikasi/settings")
+        .set("Authorization", TOKEN)
+        .send({ statusNotifikasi: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.statusNotifikasi).toBe(false);
+    });
+
+    it("400 - toggle notification settings invalid type", async () => {
+      const res = await request(app)
+        .put("/api/notifikasi/settings")
+        .set("Authorization", TOKEN)
+        .send({ statusNotifikasi: "false" });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("500 - error toggle settings", async () => {
+      (db.update as jest.Mock).mockImplementation(() => {
+        throw new Error("DB error");
+      });
+
+      const res = await request(app)
+        .put("/api/notifikasi/settings")
+        .set("Authorization", TOKEN)
+        .send({ statusNotifikasi: true });
+
+      expect(res.status).toBe(500);
     });
   });
 });
