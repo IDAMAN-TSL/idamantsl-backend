@@ -1,9 +1,9 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT),
-    secure: false,
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: false, 
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -14,7 +14,7 @@ export async function sendResetPasswordEmail(
     toEmail: string,
     resetToken: string
 ): Promise<void> {
-    const frontendUrl = process.env.FRONTEND_URL;
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
     const resetLink = `${frontendUrl}/forgot-password/reset?email=${encodeURIComponent(toEmail)}&token=${resetToken}`;
 
     const html = `
