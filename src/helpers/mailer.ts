@@ -67,7 +67,7 @@ Link ini akan kadaluarsa dalam 15 menit. Jika Anda tidak meminta reset password,
     `.trim();
 
     await transporter.sendMail({
-        from: process.env.SMTP_FROM,
+        from: process.env.SMTP_FROM || "IDAMAN TSL <noreply@bbksda-jabar.id>",
         replyTo: process.env.SMTP_USER,
         to: toEmail,
         subject: "[IDAMAN TSL] Reset Password Anda",
