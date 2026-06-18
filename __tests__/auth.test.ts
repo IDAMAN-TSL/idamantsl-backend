@@ -148,6 +148,35 @@ describe("Auth Endpoints", () => {
       expect(res.status).toBe(403);
       expect(res.body.success).toBe(false);
     });
+
+    it("gagal login jika akun telah dihapus (soft delete)", async () => {
+      (mockDb.query.users.findFirst as jest.Mock).mockResolvedValue({
+        id: 1,
+        email: "admin@bbksda-jabar.id",
+        password: "hashed_password",
+        isActive: true,
+        deletedAt: new Date(),
+      });
+
+      const res = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "admin@bbksda-jabar.id", password: "admin123" });
+
+      expect(res.status).toBe(403);
+      expect(res.body.message).toBe("Akun ini telah dihapus.");
+    });
+
+    it("500 - error saat login", async () => {
+      (mockDb.query.users.findFirst as jest.Mock).mockImplementation(() => {
+        throw new Error("DB Error");
+      });
+
+      const res = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "admin@bbksda-jabar.id", password: "admin123" });
+
+      expect(res.status).toBe(500);
+    });
   });
 
   describe("POST /api/auth/logout", () => {
@@ -224,6 +253,18 @@ describe("Auth Endpoints", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
+    });
+
+    it("500 - error saat forgot password", async () => {
+      (mockDb.query.users.findFirst as jest.Mock).mockImplementation(() => {
+        throw new Error("DB Error");
+      });
+
+      const res = await request(app)
+        .post("/api/auth/forgot-password")
+        .send({ email: "admin@bbksda-jabar.id" });
+
+      expect(res.status).toBe(500);
     });
   });
 
@@ -333,5 +374,68 @@ describe("Auth Endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
+
+    it("gagal jika token reset tidak cocok", async () => {
+      (mockDb.query.users.findFirst as jest.Mock).mockResolvedValue({
+        id: 1,
+        email: "admin@bbksda-jabar.id",
+        resetToken: "654321",
+        resetTokenExpiry: new Date(Date.now() + 1000000),
+      });
+
+      const res = await request(app)
+        .post("/api/auth/reset-password")
+        .send({
+          email: "admin@bbksda-jabar.id",
+          token: "123456",
+          newPassword: "passwordbaru123",
+          confirmPassword: "passwordbaru123",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Token tidak valid");
+    });
+
+    it("gagal jika password baru pernah digunakan", async () => {
+      (mockDb.query.users.findFirst as jest.Mock).mockResolvedValue({
+        id: 1,
+        email: "admin@bbksda-jabar.id",
+        resetToken: "123456",
+        resetTokenExpiry: new Date(Date.now() + 1000000),
+        password: "hashed_old_password",
+        passwordHistory: ["hashed_old_password"],
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const res = await request(app)
+        .post("/api/auth/reset-password")
+        .send({
+          email: "admin@bbksda-jabar.id",
+          token: "123456",
+          newPassword: "old_password",
+          confirmPassword: "old_password",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain("Password baru tidak boleh sama");
+    });
+
+    it("500 - error saat reset password", async () => {
+      (mockDb.query.users.findFirst as jest.Mock).mockImplementation(() => {
+        throw new Error("DB Error");
+      });
+
+      const res = await request(app)
+        .post("/api/auth/reset-password")
+        .send({
+          email: "admin@bbksda-jabar.id",
+          token: "123456",
+          newPassword: "password123",
+          confirmPassword: "password123",
+        });
+
+      expect(res.status).toBe(500);
+    });
   });
 });
+

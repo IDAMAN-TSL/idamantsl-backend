@@ -36,6 +36,8 @@ function oneYearFromNow() {
 }
 
 async function syncExpiringSkNotifications(user: { id: number; role: string; wilayahId: number | null }) {
+  if (user.role === "seksi_wilayah") return;
+
   const deadline = oneYearFromNow();
 
   for (const module of EXPIRING_SK_MODULES) {
@@ -87,6 +89,17 @@ export async function getNotifikasi(req: AuthRequest, res: Response) {
   try {
     if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
     const user = req.user;
+
+    if (user.role === "seksi_wilayah") {
+      return res.status(200).json({
+        success: true,
+        message: "Seksi wilayah tidak memiliki fitur notifikasi",
+        total: 0,
+        unreadCount: 0,
+        data: [],
+      });
+    }
+
     const { status } = req.query;
 
     if (status && !["unread", "read", "all"].includes(status as string)) {
