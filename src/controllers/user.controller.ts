@@ -99,7 +99,6 @@ export async function getAllUsers(req: Request, res: Response) {
       .select(USER_SELECT_FIELDS)
       .from(users)
       .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
-      .where(isNull(users.deletedAt))
       .orderBy(users.createdAt);
 
     res.status(200).json({ data: result });
@@ -351,5 +350,39 @@ export async function adminResetPassword(req: Request, res: Response) {
     res.status(200).json({ message: "Password berhasil direset oleh admin" });
   } catch (error) {
     return handleError(res, error, "adminResetPassword", "Gagal mereset password");
+  }
+}
+
+// ─── PUT /api/users/:id/activate ──────────────────────────────────────────────
+
+export async function activateUser(req: Request, res: Response) {
+  try {
+    const id = validateId(req.params.id, res);
+    if (id === null) return;
+
+    const existing = await db
+      .select({ id: users.id, isActive: users.isActive })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (!existing[0]) {
+      res.status(404).json({ message: "User tidak ditemukan" });
+      return;
+    }
+
+    if (existing[0].isActive) {
+      res.status(400).json({ message: "User sudah dalam keadaan aktif" });
+      return;
+    }
+
+    await db
+      .update(users)
+      .set({ deletedAt: null, isActive: true, updatedAt: new Date() })
+      .where(eq(users.id, id));
+
+    res.status(200).json({ message: "User berhasil diaktifkan kembali" });
+  } catch (error) {
+    return handleError(res, error, "activateUser", "Gagal mengaktifkan user");
   }
 }

@@ -11,7 +11,7 @@ import referensiTslRoutes from "./src/routes/referensi-tsl.routes";
 import verifikasiRoutes from "./src/routes/verifikasi.routes";
 import wilayahRoutes from "./src/routes/wilayah.routes";
 import notifikasiRoutes from "./src/routes/notifikasi.routes";
-
+import { activityLogger } from "./src/middlewares/activity-logger.middleware";
 
 dotenv.config();
 
@@ -31,6 +31,16 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+  next();
+});
+
+app.use(activityLogger);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

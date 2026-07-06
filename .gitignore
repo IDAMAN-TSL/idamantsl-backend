@@ -8,3 +8,4 @@ dist/
 Thumbs.db
 .kiro/
 notes/
+__mocks__/

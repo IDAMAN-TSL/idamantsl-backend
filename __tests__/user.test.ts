@@ -711,4 +711,82 @@ describe("User Controller", () => {
       expect(res.body.message).toBe("Gagal mereset password");
     });
   });
+
+  describe("PUT /api/users/:id/activate", () => {
+    it("200 - berhasil mengaktifkan user", async () => {
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{ id: 2, isActive: false }]),
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+      mockUpdate();
+
+      const res = await request(app)
+        .put("/api/users/2/activate")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("User berhasil diaktifkan kembali");
+    });
+
+    it("400 - user sudah dalam keadaan aktif", async () => {
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{ id: 2, isActive: true }]),
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+
+      const res = await request(app)
+        .put("/api/users/2/activate")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("User sudah dalam keadaan aktif");
+    });
+
+    it("404 - user tidak ditemukan", async () => {
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([]),
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+
+      const res = await request(app)
+        .put("/api/users/999/activate")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(404);
+      expect(res.body.message).toBe("User tidak ditemukan");
+    });
+
+    it("400 - ID tidak valid", async () => {
+      const res = await request(app)
+        .put("/api/users/abc/activate")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(400);
+    });
+
+    it("500 - error server saat aktivasi gagal", async () => {
+      const selectChain = {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{ id: 2, isActive: false }]),
+      };
+      (db.select as jest.Mock).mockReturnValue(selectChain);
+      (db.update as jest.Mock).mockImplementation(() => {
+        throw new Error("DB error");
+      });
+
+      const res = await request(app)
+        .put("/api/users/2/activate")
+        .set("Authorization", mockAdminToken);
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe("Gagal mengaktifkan user");
+    });
+  });
 });
