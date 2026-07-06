@@ -23,9 +23,17 @@ export const activityLogger = (req: Request, res: Response, next: NextFunction) 
         if (endpoint.includes('register')) activity = 'User Register';
 
         // Panggil fungsi secara asinkron (jangan ditunggu/await agar tidak memblokir request)
-        appendLogToSheet(userId, userName, endpoint, activity).catch(err => {
-            console.error('Activity Logger Error:', err);
-        });
+        try {
+            if (typeof appendLogToSheet !== 'function') {
+                console.error('Activity Logger Error: appendLogToSheet is not a function');
+            } else {
+                appendLogToSheet(userId, userName, endpoint, activity).catch(err => {
+                    console.error('Activity Logger Error:', err);
+                });
+            }
+        } catch (err) {
+            console.error('Activity Logger Sync Error:', err);
+        }
     }
 
     next();

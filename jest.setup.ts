@@ -9,5 +9,6 @@ afterAll(() => {
 });
 
 jest.mock('./src/services/google-sheets.service', () => ({
+  __esModule: true,
   appendLogToSheet: jest.fn().mockResolvedValue(true)
 }));
