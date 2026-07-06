@@ -11,7 +11,6 @@ import referensiTslRoutes from "./src/routes/referensi-tsl.routes";
 import verifikasiRoutes from "./src/routes/verifikasi.routes";
 import wilayahRoutes from "./src/routes/wilayah.routes";
 import notifikasiRoutes from "./src/routes/notifikasi.routes";
-import { activityLogger } from "./src/middlewares/activity-logger.middleware";
 
 dotenv.config();
 
@@ -39,8 +38,6 @@ app.use((req, res, next) => {
   res.setHeader("Surrogate-Control", "no-store");
   next();
 });
-
-app.use(activityLogger);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
