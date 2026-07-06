@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { eq, and, ne, isNull } from "drizzle-orm";
+import { eq, and, ne, isNull, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "../../db";
 import { users, wilayah } from "../../db/schema";
@@ -95,11 +95,23 @@ function validateOptionalPassword(
 
 export async function getAllUsers(req: Request, res: Response) {
   try {
-    const result = await db
-      .select(USER_SELECT_FIELDS)
-      .from(users)
-      .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
-      .orderBy(users.createdAt);
+    const { isActive } = req.query;
+
+    let result;
+    if (isActive === "false") {
+      result = await db
+        .select(USER_SELECT_FIELDS)
+        .from(users)
+        .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
+        .where(eq(users.isActive, false))
+        .orderBy(desc(users.deletedAt));
+    } else {
+      result = await db
+        .select(USER_SELECT_FIELDS)
+        .from(users)
+        .leftJoin(wilayah, eq(users.wilayahId, wilayah.id))
+        .orderBy(users.createdAt);
+    }
 
     res.status(200).json({ data: result });
   } catch (error) {
