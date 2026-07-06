@@ -9,3 +9,9 @@ afterAll(() => {
   (console.error as jest.Mock).mockRestore();
   (console.warn as jest.Mock).mockRestore();
 });
+
+// Mock service Google Sheets secara global agar tidak melakukan hit ke API saat testing
+// dan mencegah error parsing dari library 'ky' (ESM)
+jest.mock('./src/services/google-sheets.service', () => ({
+  appendLogToSheet: jest.fn().mockResolvedValue(true)
+}));
