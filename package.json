@@ -29,7 +29,8 @@
     "collectCoverageFrom": [
       "src/**/*.ts",
       "!src/**/*.d.ts",
-      "!src/services/google-sheets.service.ts"
+      "!src/services/google-sheets.service.ts",
+      "!src/middlewares/activity-logger.middleware.ts"
     ]
   },
   "scripts": {
